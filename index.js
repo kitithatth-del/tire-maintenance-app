@@ -32,7 +32,7 @@ async function updateCache() {
   const timestamp = new Date().toLocaleTimeString('th-TH', { hour12: false });
   console.log(`[${timestamp}] เริ่มดึงข้อมูลจาก Google Sheets...`);
   try {
-    const data = await fetchAllData();
+    let data = await fetchAllData();
     
     // บันทึกสถิติสำหรับ API Status
     cachedStats = {
