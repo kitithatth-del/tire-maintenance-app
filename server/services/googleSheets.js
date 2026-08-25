@@ -122,9 +122,8 @@ const extractMetadataFromRaw = (truckDataRaw, gpsDataRaw) => {
 const getTireDataFromRaw = (rawData) => {
   if (!rawData || rawData.length === 0) return [];
 
-  // รูปแบบที่ 2: Array of Objects แล้ว — return ตรงๆ (fallback)
   if (rawData.length > 0 && !Array.isArray(rawData[0])) {
-    return rawData.filter(row => row && typeof row === 'object');
+    return rawData;
   }
 
   // รูปแบบที่ 1: Array of Arrays (จาก GAS หรือ XLSX)
@@ -245,7 +244,7 @@ async function fetchAllData() {
     console.log('🔄 เริ่มดึงข้อมูลทั้งหมดผ่าน Google Apps Script Web App (แบบ Pagination)...');
     try {
       const fetchPaged = async (type) => {
-        let allData = [];
+        const allData = [];
         let start = 1;
         const limit = 10000;
         let hasMore = true;
@@ -254,9 +253,13 @@ async function fetchAllData() {
           const url = `${gasUrl.trim()}?type=${type}&start=${start}&limit=${limit}`;
           const res = await axios.get(url, { timeout: 300000 });
           if (res.data && res.data.status === 'ready') {
-            allData = allData.concat(res.data.data);
+            for (let i = 0; i < res.data.data.length; i++) {
+              allData.push(res.data.data[i]);
+            }
             hasMore = res.data.hasMore;
             start = res.data.nextStart || (start + limit);
+            // Free up memory manually
+            res.data.data = null;
           } else {
             throw new Error(res.data ? res.data.message : 'Unknown GAS error');
           }
