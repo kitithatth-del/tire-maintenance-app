@@ -36,35 +36,41 @@ async function updateCache() {
     
     // บันทึกสถิติสำหรับ API Status
     cachedStats = {
-      totalChangeTires: data.changeData ? data.changeData.length : 0,
-      totalCheckTires: data.checkData ? data.checkData.length : 0,
-      totalReceiveTires: data.receiveData ? data.receiveData.length : 0,
-      totalTrucks: data.truckData ? Object.keys(data.truckData).length : 0,
+      totalChangeTires: data.changeCount || 0,
+      totalCheckTires: data.checkCount || 0,
+      totalReceiveTires: data.receiveCount || 0,
+      totalTrucks: data.truckCount || 0,
       lastUpdated: data.lastUpdated,
       status: 'ready'
     };
     
-    // บีบอัดข้อมูลแบบทยอยต่อ String (Incremental) เพื่อไม่ให้ RAM พุ่งทะลุ 512MB
-    let jsonStr = '{"changeData":';
-    jsonStr += JSON.stringify(data.changeData || []);
-    data.changeData = null; // ทิ้งทันที!
+    let jsonStr = '';
+    if (data.isPreStringified) {
+      jsonStr = '{"changeData":' + data.changeDataString;
+      data.changeDataString = null; // ทิ้งทันที!
 
-    jsonStr += ',"checkData":';
-    jsonStr += JSON.stringify(data.checkData || []);
-    data.checkData = null; // ทิ้งทันที!
+      jsonStr += ',"checkData":' + data.checkDataString;
+      data.checkDataString = null; // ทิ้งทันที!
 
-    jsonStr += ',"receiveData":';
-    jsonStr += JSON.stringify(data.receiveData || []);
-    data.receiveData = null; // ทิ้งทันที!
+      jsonStr += ',"receiveData":' + data.receiveDataString;
+      data.receiveDataString = null; // ทิ้งทันที!
 
-    jsonStr += ',"gpsData":' + JSON.stringify(data.gpsData || []);
-    jsonStr += ',"truckData":' + JSON.stringify(data.truckData || {});
-    data.truckData = null;
-
-    jsonStr += ',"lastUpdated":"' + data.lastUpdated + '"}';
+      jsonStr += ',"gpsData":' + data.gpsDataString;
+      jsonStr += ',"truckData":' + data.truckDataString;
+      jsonStr += ',"lastUpdated":"' + data.lastUpdated + '"}';
+    } else {
+      // Fallback สำหรับกรณี XLSX ที่ส่งมาเป็น Array of Objects
+      jsonStr = '{"changeData":' + JSON.stringify(data.changeData || []) + 
+                ',"checkData":' + JSON.stringify(data.checkData || []) +
+                ',"receiveData":' + JSON.stringify(data.receiveData || []) +
+                ',"gpsData":' + JSON.stringify(data.gpsData || []) +
+                ',"truckData":' + JSON.stringify(data.truckData || {}) +
+                ',"lastUpdated":"' + data.lastUpdated + '"}';
+    }
     
     cachedGzipBuffer = zlib.gzipSync(jsonStr);
     jsonStr = null; // ทิ้ง string ก้อนใหญ่ทันที
+    data = null; // เคลียร์ RAM 100%
     
     const ts2 = new Date().toLocaleTimeString('th-TH', { hour12: false });
     console.log(`[${ts2}] ✅ อัปเดตข้อมูลสำเร็จ! (ขนาดบีบอัด: ${(cachedGzipBuffer.length / 1024 / 1024).toFixed(2)} MB)`);
