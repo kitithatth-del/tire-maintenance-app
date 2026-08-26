@@ -258,38 +258,19 @@ async function fetchAllData() {
             count += arr.length;
             if (arr.length > 0) {
               let chunkStr = JSON.stringify(arr);
-              // ตัด [ หัวและ ] ท้าย ออกเพื่อเอาไปต่อ string ทีหลัง
               chunkStr = chunkStr.substring(1, chunkStr.length - 1);
               allDataChunks.push(chunkStr);
             }
-    const fetchPaged = async (type) => {
-      const allDataChunks = [];
-      let start = 1;
-      const limit = 10000;
-      let hasMore = true;
-      let count = 0;
-      while (hasMore) {
-        console.log(`  - กำลังดึงข้อมูล ${type} (เริ่มบรรทัดที่ ${start})...`);
-        const url = `${gasUrl.trim()}?type=${type}&start=${start}&limit=${limit}`;
-        const res = await axios.get(url, { timeout: 300000 });
-        if (res.data && res.data.status === 'ready') {
-          const arr = res.data.data || [];
-          count += arr.length;
-          if (arr.length > 0) {
-            allDataChunks.push(JSON.stringify(arr));
+            hasMore = res.data.hasMore;
+            start = res.data.nextStart || (start + limit);
+            res.data = null;
+          } else {
+            throw new Error(res.data ? res.data.message : 'Unknown GAS error');
           }
-          hasMore = res.data.hasMore;
-          start = res.data.nextStart || (start + limit);
-          res.data = null;
-        } else {
-          throw new Error(res.data ? res.data.message : 'Unknown GAS error');
         }
-      }
-      return { count, chunks: allDataChunks };
-    };
+        return { count, chunks: allDataChunks };
+      };
 
-    try {
-      console.log('🔄 เริ่มดึงข้อมูลทั้งหมดผ่าน Google Apps Script Web App (แบบ Pagination)...');
 
       const receiveData = await fetchPaged('receive');
       const changeData = await fetchPaged('change');
