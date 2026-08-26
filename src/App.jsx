@@ -14,7 +14,7 @@ import logoUrl from './assets/logo.png';
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') !== 'light');
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   useEffect(() => {
     document.body.classList.toggle('light-mode', !isDarkMode);
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
