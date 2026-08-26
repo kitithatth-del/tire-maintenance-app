@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const zlib = require('zlib');
-const { fetchAllData } = require('./services/googleSheets');
+const { fetchAllDataStreaming } = require('./services/googleSheets');
 require('dotenv').config();
 
 const app = express();
@@ -32,97 +32,35 @@ async function updateCache() {
   const timestamp = new Date().toLocaleTimeString('th-TH', { hour12: false });
   console.log(`[${timestamp}] เริ่มดึงข้อมูลจาก Google Sheets...`);
   try {
-    let data = await fetchAllData();
+    // สร้าง gzip stream ที่จะรับข้อมูลทีละชิ้น แทนการเก็บทั้งก้อนก่อน
+    const gzip = zlib.createGzip();
+    const outputChunks = [];
     
-    // บันทึกสถิติสำหรับ API Status
+    gzip.on('data', (chunk) => outputChunks.push(chunk));
+    
+    const gzipDone = new Promise((resolve, reject) => {
+      gzip.on('end', resolve);
+      gzip.on('error', reject);
+    });
+
+    // ส่ง gzip writer เข้าไปใน fetchAllDataStreaming ให้มัน write ตรงๆ เลย
+    const stats = await fetchAllDataStreaming(gzip);
+    
+    // รอให้บีบอัดเสร็จ
+    await gzipDone;
+
+    cachedGzipBuffer = Buffer.concat(outputChunks);
+    outputChunks.length = 0; // เคลียร์ array
+
     cachedStats = {
-      totalChangeTires: data.changeCount || 0,
-      totalCheckTires: data.checkCount || 0,
-      totalReceiveTires: data.receiveCount || 0,
-      totalTrucks: data.truckCount || 0,
-      lastUpdated: data.lastUpdated,
+      totalChangeTires: stats.changeCount || 0,
+      totalCheckTires: stats.checkCount || 0,
+      totalReceiveTires: stats.receiveCount || 0,
+      totalTrucks: stats.truckCount || 0,
+      lastUpdated: stats.lastUpdated,
       status: 'ready'
     };
-    
-    if (data.useChunks) {
-      // ใช้ Streaming เพื่อบีบอัดข้อมูลทีละชิ้น ลดการใช้ RAM สูงสุด
-      const gzip = zlib.createGzip();
-      const chunks = [];
-      
-      gzip.on('data', (chunk) => chunks.push(chunk));
-      
-      const gzipPromise = new Promise((resolve, reject) => {
-        gzip.on('end', () => {
-          cachedGzipBuffer = Buffer.concat(chunks);
-          resolve();
-        });
-        gzip.on('error', reject);
-      });
 
-      gzip.write('{"changeData":[');
-      if (data.changeChunks) {
-        for (let i = 0; i < data.changeChunks.length; i++) {
-          gzip.write(data.changeChunks[i]);
-          if (i < data.changeChunks.length - 1) gzip.write(',');
-        }
-      }
-      data.changeChunks = null;
-
-      gzip.write('],"checkData":[');
-      if (data.checkChunks) {
-        for (let i = 0; i < data.checkChunks.length; i++) {
-          gzip.write(data.checkChunks[i]);
-          if (i < data.checkChunks.length - 1) gzip.write(',');
-        }
-      }
-      data.checkChunks = null;
-
-      gzip.write('],"receiveData":[');
-      if (data.receiveChunks) {
-        for (let i = 0; i < data.receiveChunks.length; i++) {
-          gzip.write(data.receiveChunks[i]);
-          if (i < data.receiveChunks.length - 1) gzip.write(',');
-        }
-      }
-      data.receiveChunks = null;
-
-      gzip.write('],"gpsData":' + (data.gpsDataString || '[]'));
-      gzip.write(',"truckData":' + (data.truckDataString || '{}'));
-      gzip.write(',"lastUpdated":"' + data.lastUpdated + '"}');
-      gzip.end();
-
-      await gzipPromise;
-      data = null;
-    } else if (data.isPreStringified) {
-      let jsonStr = '{"changeData":' + data.changeDataString;
-      data.changeDataString = null; // ทิ้งทันที!
-
-      jsonStr += ',"checkData":' + data.checkDataString;
-      data.checkDataString = null; // ทิ้งทันที!
-
-      jsonStr += ',"receiveData":' + data.receiveDataString;
-      data.receiveDataString = null; // ทิ้งทันที!
-
-      jsonStr += ',"gpsData":' + data.gpsDataString;
-      jsonStr += ',"truckData":' + data.truckDataString;
-      jsonStr += ',"lastUpdated":"' + data.lastUpdated + '"}';
-      
-      cachedGzipBuffer = zlib.gzipSync(jsonStr);
-      jsonStr = null;
-    } else {
-      // Fallback สำหรับกรณี XLSX ที่ส่งมาเป็น Array of Objects
-      const jsonStr = '{"changeData":' + JSON.stringify(data.changeData || []) + 
-                ',"checkData":' + JSON.stringify(data.checkData || []) +
-                ',"receiveData":' + JSON.stringify(data.receiveData || []) +
-                ',"gpsData":' + JSON.stringify(data.gpsData || []) +
-                ',"truckData":' + JSON.stringify(data.truckData || {}) +
-                ',"lastUpdated":"' + data.lastUpdated + '"}';
-      
-      cachedGzipBuffer = zlib.gzipSync(jsonStr);
-    }
-    
-    data = null; // เคลียร์ RAM 100%
-    
     const ts2 = new Date().toLocaleTimeString('th-TH', { hour12: false });
     console.log(`[${ts2}] ✅ อัปเดตข้อมูลสำเร็จ! (ขนาดบีบอัด: ${(cachedGzipBuffer.length / 1024 / 1024).toFixed(2)} MB)`);
   } catch (error) {

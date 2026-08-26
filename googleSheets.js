@@ -271,7 +271,6 @@ async function fetchAllData() {
         return { count, chunks: allDataChunks };
       };
 
-
       const receiveData = await fetchPaged('receive');
       const changeData = await fetchPaged('change');
       const checkData = await fetchPaged('check');
@@ -283,9 +282,6 @@ async function fetchAllData() {
       const gpsDataRaw = masterRes.data.gpsDataRaw;
 
       const truckMetadata = extractMetadataFromRaw(truckDataRaw, gpsDataRaw);
-      // GAS ส่งมาเป็น Array of Objects แล้ว
-      // แต่เราดัก Stringify ไว้แล้วใน jsonString เพื่อประหยัด RAM
-      // ไม่ต้องผ่าน getTireDataFromRaw แล้ว
 
       console.log(`🎉 ดึงข้อมูลผ่าน GAS สำเร็จ 100%! เปลี่ยนยาง: ${changeData.count} | ตรวจเช็ค: ${checkData.count} | รับยาง: ${receiveData.count} | รถ: ${Object.keys(truckMetadata).length}`);
 
@@ -300,81 +296,93 @@ async function fetchAllData() {
         truckDataString: JSON.stringify(truckMetadata),
         truckCount: Object.keys(truckMetadata).length,
         lastUpdated: new Date().toISOString(),
-        isPreStringified: true,
         useChunks: true
       };
     } catch (err) {
       console.warn('⚠️ การดึงข้อมูลผ่าน GAS ล้มเหลว สลับไปใช้วิธีดาวน์โหลด XLSX:', err.message);
     }
   }
-
-  console.log('🔄 เริ่มดึงข้อมูลทั้งหมด (Google Drive XLSX Downloader)...');
-  
-  if (!TIRE_SHEET_ID || !MASTER_SHEET_ID) {
-    throw new Error('❌ ไม่พบ ID ของ Google Sheets ในไฟล์ .env');
-  }
-
-  const auth = new GoogleAuth({
-    keyFile: path.join(__dirname, '..', 'credentials.json'),
-    scopes: ['https://www.googleapis.com/auth/drive.readonly']
-  });
-  const client = await auth.getClient();
-  const token = (await client.getAccessToken()).token;
-
-  const tireFile = path.join(__dirname, '..', 'tire_temp.xlsx');
-  const masterFile = path.join(__dirname, '..', 'master_temp.xlsx');
-
-  try {
-    console.log('  ⬇️ กำลังดาวน์โหลดไฟล์สเปรดชีตเรื่องยาง (XLSX)...');
-    await downloadXlsx(token, TIRE_SHEET_ID, tireFile);
-    console.log('  ⬇️ กำลังดาวน์โหลดไฟล์สเปรดชีตข้อมูลรถและ GPS (XLSX)...');
-    await downloadXlsx(token, MASTER_SHEET_ID, masterFile);
-
-    console.log('  ⚙️ กำลังอ่านและแปลงข้อมูล...');
-    
-    const tireWb = xlsx.readFile(tireFile);
-    const masterWb = xlsx.readFile(masterFile);
-
-    const receiveRaw = xlsx.utils.sheet_to_json(tireWb.Sheets['รับยางเข้า'], { header: 1 });
-    const changeRaw = xlsx.utils.sheet_to_json(tireWb.Sheets['ข้อมูลเปลี่ยนยาง'], { header: 1 });
-    const checkRaw = xlsx.utils.sheet_to_json(tireWb.Sheets['ตรวจเช็คลมยางดอกยาง'], { header: 1 });
-    const truckRaw = xlsx.utils.sheet_to_json(masterWb.Sheets['Data รถ'], { header: 1 });
-    const gpsRaw = xlsx.utils.sheet_to_json(masterWb.Sheets['GPS สถานที่ปัจจุบัน'], { header: 1 });
-
-    const truckMetadata = extractMetadataFromRaw(truckRaw, gpsRaw);
-    const receiveData = getTireDataFromRaw(receiveRaw);
-    const changeData = getTireDataFromRaw(changeRaw);
-    const checkData = getTireDataFromRaw(checkRaw);
-
-    console.log(`🎉 ดึงข้อมูลสำเร็จ 100%! เปลี่ยนยาง: ${changeData.length} | ตรวจเช็ค: ${checkData.length} | รับยาง: ${receiveData.length} | รถ: ${Object.keys(truckMetadata).length}`);
-
-    // Clean up temporary files
-    try {
-      fs.unlinkSync(tireFile);
-      fs.unlinkSync(masterFile);
-    } catch (e) {
-      // ignore
-    }
-
-    return {
-      receiveData,
-      changeData,
-      checkData,
-      gpsData: [],
-      truckData: truckMetadata,
-      lastUpdated: new Date().toISOString()
-    };
-  } catch (error) {
-    // Clean up temporary files on error
-    try {
-      if (fs.existsSync(tireFile)) fs.unlinkSync(tireFile);
-      if (fs.existsSync(masterFile)) fs.unlinkSync(masterFile);
-    } catch (e) {
-      // ignore
-    }
-    console.error('❌ เกิดข้อผิดพลาดในการดึงข้อมูล:', error.message);
-    throw error;
-  }
+  throw new Error('GAS_WEB_APP_URL not configured');
 }
 
-module.exports = { fetchAllData };
+// ฟังก์ชันใหม่: เขียนข้อมูลตรงเข้า gzip stream ทีละหน้า ไม่เก็บไว้ใน RAM
+async function fetchAllDataStreaming(gzipStream) {
+  const gasUrl = process.env.GAS_WEB_APP_URL;
+  if (!gasUrl || gasUrl.trim() === '') {
+    throw new Error('GAS_WEB_APP_URL not configured');
+  }
+
+  console.log('🔄 เริ่มดึงข้อมูลผ่าน GAS (Streaming Mode)...');
+
+  const stats = { changeCount: 0, checkCount: 0, receiveCount: 0, truckCount: 0, lastUpdated: null };
+
+  // ฟังก์ชันดึงข้อมูลทีละหน้าแล้ว write ลง stream เลย
+  const fetchPagedStream = async (type, isFirst) => {
+    let start = 1;
+    const limit = 10000;
+    let hasMore = true;
+    let count = 0;
+    let firstPageOfType = true;
+
+    while (hasMore) {
+      console.log(`  - กำลังดึงข้อมูล ${type} (เริ่มบรรทัดที่ ${start})...`);
+      const url = `${gasUrl.trim()}?type=${type}&start=${start}&limit=${limit}`;
+      const res = await axios.get(url, { timeout: 300000 });
+
+      if (res.data && res.data.status === 'ready') {
+        const arr = res.data.data || [];
+        count += arr.length;
+
+        if (arr.length > 0) {
+          let chunkStr = JSON.stringify(arr);
+          // ตัด [ และ ] ออก เพื่อเอาแค่ข้อมูลข้างใน
+          chunkStr = chunkStr.substring(1, chunkStr.length - 1);
+
+          if (!firstPageOfType) {
+            // หน้าถัดไปของ type เดิม ต้องใส่ comma คั่น
+            gzipStream.write(',');
+          }
+          gzipStream.write(chunkStr);
+          firstPageOfType = false;
+        }
+
+        hasMore = res.data.hasMore;
+        start = res.data.nextStart || (start + limit);
+        res.data = null; // คืน RAM ทันที
+      } else {
+        throw new Error(res.data ? res.data.message : `Unknown GAS error for type ${type}`);
+      }
+    }
+    return count;
+  };
+
+  // เขียน JSON structure ทีละส่วน พร้อมดึงข้อมูลไปด้วย
+  gzipStream.write('{"changeData":[');
+  stats.changeCount = await fetchPagedStream('change');
+
+  gzipStream.write('],"checkData":[');
+  stats.checkCount = await fetchPagedStream('check');
+
+  gzipStream.write('],"receiveData":[');
+  stats.receiveCount = await fetchPagedStream('receive');
+
+  // ดึง Master data
+  console.log('  - กำลังดึงข้อมูล Master (รถ/GPS)...');
+  const masterRes = await axios.get(`${gasUrl.trim()}?type=master`, { timeout: 300000 });
+  if (!masterRes.data || masterRes.data.status !== 'ready') throw new Error('Failed to fetch Master');
+  const truckMetadata = extractMetadataFromRaw(masterRes.data.truckDataRaw, masterRes.data.gpsDataRaw);
+  masterRes.data = null;
+
+  stats.truckCount = Object.keys(truckMetadata).length;
+  stats.lastUpdated = new Date().toISOString();
+
+  gzipStream.write('],"gpsData":[]');
+  gzipStream.write(`,"truckData":${JSON.stringify(truckMetadata)}`);
+  gzipStream.write(`,"lastUpdated":"${stats.lastUpdated}"}`);
+  gzipStream.end();
+
+  console.log(`🎉 Streaming สำเร็จ! เปลี่ยนยาง: ${stats.changeCount} | ตรวจเช็ค: ${stats.checkCount} | รับยาง: ${stats.receiveCount} | รถ: ${stats.truckCount}`);
+  return stats;
+}
+
+module.exports = { fetchAllData, fetchAllDataStreaming };
