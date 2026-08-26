@@ -82,82 +82,68 @@ const extractMetadataFromRaw = (truckDataRaw, gpsDataRaw) => {
       const statusIdx = getIdx('สถานะรถ');
       const locIdx = getIdx('สถานที่ปัจจุบัน');
       const timeIdx = headers.findIndex(c => c && String(c).replace(/\s+/g, '').match(/วัน\/เวลา|วันที่\/เวลา|วันเวลา|เวลาปัจจุบัน|เวลา/));
+
+      // หาคอลัมน์เบอร์รถ (ถ้ามีชื่อคอลัมน์ระบุไว้) ถ้าไม่มีให้ใช้ column A
+      const truckNoColIdx = headers.findIndex(c => c && String(c).replace(/\s+/g, '').includes('เบอร์รถ'));
+
       for (let i = headerIdx + 1; i < rawRows.length; i++) {
         const row = rawRows[i];
         if (!row) continue;
-        
+
         let targetTruckNo = null;
 
-        // ดึงค่าทะเบียนรถเพื่อใช้เทียบ
-        if (tabienIdx !== -1 && row[tabienIdx]) {
+        // === วิธีที่ 1: เบอร์รถจากคอลัมน์ A หรือคอลัมน์ "เบอร์รถ" (แม่นยำที่สุด) ===
+        const colAIdx = truckNoColIdx !== -1 ? truckNoColIdx : 0;
+        const rawTruckNoVal = row[colAIdx] ? String(row[colAIdx]).trim() : null;
+        if (rawTruckNoVal) {
+          const norm = normalizeTruckId(rawTruckNoVal);
+          if (norm && metadata[norm]) {
+            targetTruckNo = norm;
+          }
+        }
+
+        // === วิธีที่ 2: แกะจากคอลัมน์ "ทะเบียนรถ" (รองรับรูปแบบต่างๆ) ===
+        if (!targetTruckNo && tabienIdx !== -1 && row[tabienIdx]) {
           const tabienStr = String(row[tabienIdx]).trim();
-          let plate = null;
-          let extractedTruckNo = null;
 
-          // 1. ลองดึงเบอร์รถจากหน้าวงเล็บ (เช่น "No.193(..." หรือ "PTL.932(...")
-          const truckMatch = tabienStr.match(/^(?:No\.?\s*)?([A-Za-z0-9\.]+)\(/i);
-          if (truckMatch) {
-             extractedTruckNo = truckMatch[1].trim(); // ได้ 193 หรือ PTL.932
+          // รูปแบบ "No.193(79-7280)" หรือ "PTL.932(69-7679)Suspend" → แกะเบอร์รถ
+          const truckInBracket = tabienStr.match(/^(?:No\.?\s*)?([A-Za-z0-9\.]+)\(/i);
+          if (truckInBracket) {
+            const norm = normalizeTruckId(truckInBracket[1].trim());
+            if (norm && metadata[norm]) targetTruckNo = norm;
           }
 
-          // 2. ดึงทะเบียนในวงเล็บ
-          const plateMatch = tabienStr.match(/\(([^)]+)\)/);
-          if (plateMatch) {
-             plate = plateMatch[1].trim();
-          } else {
-             plate = tabienStr; // กรณีเป็นทะเบียนเพียวๆ
-          }
+          // รูปแบบทะเบียนในวงเล็บหรือทะเบียนล้วน → จับคู่กับ plate ในฐานข้อมูล
+          if (!targetTruckNo) {
+            const plateInBracket = tabienStr.match(/\(([^)]+)\)/);
+            const plate = plateInBracket ? plateInBracket[1].trim() : tabienStr;
+            const cleanPlate = plate.replace(/[^0-9ก-ฮa-zA-Z]/g, '');
+            const numPlate = plate.replace(/[^0-9]/g, '');
 
-          // พยายามหาจากเบอร์รถที่แกะได้ก่อน (แม่นยำที่สุด)
-          if (extractedTruckNo) {
-             const normExtracted = normalizeTruckId(extractedTruckNo);
-             if (metadata[normExtracted]) {
-                targetTruckNo = normExtracted;
-             }
-          }
-
-          // ถ้ายังหาไม่เจอ ให้หาจากทะเบียนรถ
-          if (!targetTruckNo && plate) {
-             const cleanSearchPlate = plate.replace(/[^0-9ก-ฮa-zA-Z]/g, '');
-             const numSearchPlate = plate.replace(/[^0-9]/g, '');
-
-             targetTruckNo = Object.keys(metadata).find(k => {
-                const mPlate = metadata[k].plate;
-                if (!mPlate) return false;
-                const cleanMPlate = mPlate.replace(/[^0-9ก-ฮa-zA-Z]/g, '');
-                
-                // เทียบแบบตัวอักษรเป๊ะๆ (ลบขีด ลบช่องว่าง)
-                if (cleanMPlate === cleanSearchPlate) return true;
-
-                // กรณีตัวอักษรพิมพ์ผิด แต่เลขตรงกันเป๊ะ (และเลขยาวพอสมควร)
-                const numMPlate = mPlate.replace(/[^0-9]/g, '');
-                if (numSearchPlate.length >= 4 && numSearchPlate === numMPlate) return true;
-
-                return false;
-             });
+            targetTruckNo = Object.keys(metadata).find(k => {
+              const mPlate = metadata[k].plate;
+              if (!mPlate) return false;
+              const cleanMPlate = mPlate.replace(/[^0-9ก-ฮa-zA-Z]/g, '');
+              if (cleanMPlate === cleanPlate) return true;
+              // fallback: เลขทะเบียนตรงกัน (ต้องมีอย่างน้อย 4 หลัก)
+              const numMPlate = mPlate.replace(/[^0-9]/g, '');
+              if (numPlate.length >= 4 && numPlate === numMPlate) return true;
+              return false;
+            });
           }
         }
 
-        // หากหาด้วยทะเบียนไม่เจอ ให้ลองดูคอลัมน์ A หรือคอลัมน์ที่มีคำว่า 'เบอร์รถ' 
-        if (!targetTruckNo) {
-          const possibleTruckNoIdx = headers.findIndex(c => c && String(c).replace(/\s+/g, '').includes('เบอร์รถ'));
-          const rawId = (possibleTruckNoIdx !== -1 && row[possibleTruckNoIdx]) ? String(row[possibleTruckNoIdx]).trim() : ((row[0]) ? String(row[0]).trim() : null);
-          if (rawId && metadata[normalizeTruckId(rawId)]) {
-            targetTruckNo = normalizeTruckId(rawId);
-          }
-        }
+        if (!targetTruckNo) continue;
 
         const status = (statusIdx !== -1 && row[statusIdx]) ? String(row[statusIdx]).trim() : null;
         const loc = (locIdx !== -1 && row[locIdx]) ? String(row[locIdx]).trim() : null;
         const timeVal = (timeIdx !== -1 && row[timeIdx]) ? row[timeIdx] : null;
-        let timeStr = timeVal ? String(timeVal).trim() : null;
+        const timeStr = timeVal ? String(timeVal).trim() : null;
 
-        if (targetTruckNo) {
-          if (!metadata[targetTruckNo]) metadata[targetTruckNo] = {};
-          if (status) metadata[targetTruckNo].gpsStatus = status;
-          if (loc) metadata[targetTruckNo].gpsLocation = loc;
-          if (timeStr) metadata[targetTruckNo].gpsTime = timeStr;
-        }
+        if (!metadata[targetTruckNo]) metadata[targetTruckNo] = {};
+        if (status) metadata[targetTruckNo].gpsStatus = status;
+        if (loc) metadata[targetTruckNo].gpsLocation = loc;
+        if (timeStr) metadata[targetTruckNo].gpsTime = timeStr;
       }
     }
   }
