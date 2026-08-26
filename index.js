@@ -44,9 +44,44 @@ async function updateCache() {
       status: 'ready'
     };
     
-    let jsonStr = '';
-    if (data.isPreStringified) {
-      jsonStr = '{"changeData":' + data.changeDataString;
+    if (data.useChunks) {
+      const buffers = [];
+      buffers.push(Buffer.from('{"changeData":[', 'utf8'));
+      if (data.changeChunks) {
+        for (let i = 0; i < data.changeChunks.length; i++) {
+          buffers.push(Buffer.from(data.changeChunks[i], 'utf8'));
+          if (i < data.changeChunks.length - 1) buffers.push(Buffer.from(',', 'utf8'));
+        }
+      }
+      data.changeChunks = null;
+
+      buffers.push(Buffer.from('],"checkData":[', 'utf8'));
+      if (data.checkChunks) {
+        for (let i = 0; i < data.checkChunks.length; i++) {
+          buffers.push(Buffer.from(data.checkChunks[i], 'utf8'));
+          if (i < data.checkChunks.length - 1) buffers.push(Buffer.from(',', 'utf8'));
+        }
+      }
+      data.checkChunks = null;
+
+      buffers.push(Buffer.from('],"receiveData":[', 'utf8'));
+      if (data.receiveChunks) {
+        for (let i = 0; i < data.receiveChunks.length; i++) {
+          buffers.push(Buffer.from(data.receiveChunks[i], 'utf8'));
+          if (i < data.receiveChunks.length - 1) buffers.push(Buffer.from(',', 'utf8'));
+        }
+      }
+      data.receiveChunks = null;
+
+      buffers.push(Buffer.from('],"gpsData":' + (data.gpsDataString || '[]'), 'utf8'));
+      buffers.push(Buffer.from(',"truckData":' + (data.truckDataString || '{}'), 'utf8'));
+      buffers.push(Buffer.from(',"lastUpdated":"' + data.lastUpdated + '"}', 'utf8'));
+
+      const finalBuffer = Buffer.concat(buffers);
+      cachedGzipBuffer = zlib.gzipSync(finalBuffer);
+      data = null;
+    } else if (data.isPreStringified) {
+      let jsonStr = '{"changeData":' + data.changeDataString;
       data.changeDataString = null; // ทิ้งทันที!
 
       jsonStr += ',"checkData":' + data.checkDataString;
@@ -58,18 +93,21 @@ async function updateCache() {
       jsonStr += ',"gpsData":' + data.gpsDataString;
       jsonStr += ',"truckData":' + data.truckDataString;
       jsonStr += ',"lastUpdated":"' + data.lastUpdated + '"}';
+      
+      cachedGzipBuffer = zlib.gzipSync(jsonStr);
+      jsonStr = null;
     } else {
       // Fallback สำหรับกรณี XLSX ที่ส่งมาเป็น Array of Objects
-      jsonStr = '{"changeData":' + JSON.stringify(data.changeData || []) + 
+      const jsonStr = '{"changeData":' + JSON.stringify(data.changeData || []) + 
                 ',"checkData":' + JSON.stringify(data.checkData || []) +
                 ',"receiveData":' + JSON.stringify(data.receiveData || []) +
                 ',"gpsData":' + JSON.stringify(data.gpsData || []) +
                 ',"truckData":' + JSON.stringify(data.truckData || {}) +
                 ',"lastUpdated":"' + data.lastUpdated + '"}';
+      
+      cachedGzipBuffer = zlib.gzipSync(jsonStr);
     }
     
-    cachedGzipBuffer = zlib.gzipSync(jsonStr);
-    jsonStr = null; // ทิ้ง string ก้อนใหญ่ทันที
     data = null; // เคลียร์ RAM 100%
     
     const ts2 = new Date().toLocaleTimeString('th-TH', { hour12: false });

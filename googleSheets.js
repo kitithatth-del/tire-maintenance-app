@@ -262,16 +262,34 @@ async function fetchAllData() {
               chunkStr = chunkStr.substring(1, chunkStr.length - 1);
               allDataChunks.push(chunkStr);
             }
-            hasMore = res.data.hasMore;
-            start = res.data.nextStart || (start + limit);
-            // Free up memory manually
-            res.data = null;
-          } else {
-            throw new Error(res.data ? res.data.message : 'Unknown GAS error');
+    const fetchPaged = async (type) => {
+      const allDataChunks = [];
+      let start = 1;
+      const limit = 10000;
+      let hasMore = true;
+      let count = 0;
+      while (hasMore) {
+        console.log(`  - กำลังดึงข้อมูล ${type} (เริ่มบรรทัดที่ ${start})...`);
+        const url = `${gasUrl.trim()}?type=${type}&start=${start}&limit=${limit}`;
+        const res = await axios.get(url, { timeout: 300000 });
+        if (res.data && res.data.status === 'ready') {
+          const arr = res.data.data || [];
+          count += arr.length;
+          if (arr.length > 0) {
+            allDataChunks.push(JSON.stringify(arr));
           }
+          hasMore = res.data.hasMore;
+          start = res.data.nextStart || (start + limit);
+          res.data = null;
+        } else {
+          throw new Error(res.data ? res.data.message : 'Unknown GAS error');
         }
-        return { count, jsonString: '[' + allDataChunks.join(',') + ']' };
-      };
+      }
+      return { count, chunks: allDataChunks };
+    };
+
+    try {
+      console.log('🔄 เริ่มดึงข้อมูลทั้งหมดผ่าน Google Apps Script Web App (แบบ Pagination)...');
 
       const receiveData = await fetchPaged('receive');
       const changeData = await fetchPaged('change');
@@ -291,9 +309,9 @@ async function fetchAllData() {
       console.log(`🎉 ดึงข้อมูลผ่าน GAS สำเร็จ 100%! เปลี่ยนยาง: ${changeData.count} | ตรวจเช็ค: ${checkData.count} | รับยาง: ${receiveData.count} | รถ: ${Object.keys(truckMetadata).length}`);
 
       return {
-        receiveDataString: receiveData.jsonString,
-        changeDataString: changeData.jsonString,
-        checkDataString: checkData.jsonString,
+        receiveChunks: receiveData.chunks,
+        changeChunks: changeData.chunks,
+        checkChunks: checkData.chunks,
         receiveCount: receiveData.count,
         changeCount: changeData.count,
         checkCount: checkData.count,
@@ -301,7 +319,8 @@ async function fetchAllData() {
         truckDataString: JSON.stringify(truckMetadata),
         truckCount: Object.keys(truckMetadata).length,
         lastUpdated: new Date().toISOString(),
-        isPreStringified: true
+        isPreStringified: true,
+        useChunks: true
       };
     } catch (err) {
       console.warn('⚠️ การดึงข้อมูลผ่าน GAS ล้มเหลว สลับไปใช้วิธีดาวน์โหลด XLSX:', err.message);
