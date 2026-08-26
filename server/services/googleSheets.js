@@ -299,8 +299,21 @@ async function fetchAllData() {
         while (hasMore) {
           console.log(`  - กำลังดึงข้อมูล ${type} (เริ่มบรรทัดที่ ${start})...`);
           const url = `${gasUrl.trim()}?type=${type}&start=${start}&limit=${limit}`;
-          const res = await axios.get(url, { timeout: 300000 });
-          if (res.data && res.data.status === 'ready') {
+          
+          let res;
+          try {
+            res = await axios.get(url, { timeout: 300000 });
+          } catch (err) {
+            if (start > 1) {
+              console.warn(`⚠️ Warning: Failed to fetch ${type} at start=${start} (${err.message}). Assuming end of data.`);
+              hasMore = false;
+              break;
+            } else {
+              throw err;
+            }
+          }
+
+          if (res && res.data && res.data.status === 'ready') {
             const arr = res.data.data || [];
             count += arr.length;
             if (arr.length > 0) {
@@ -312,7 +325,7 @@ async function fetchAllData() {
             start = res.data.nextStart || (start + limit);
             res.data = null;
           } else {
-            throw new Error(res.data ? res.data.message : 'Unknown GAS error');
+            throw new Error(res ? (res.data ? res.data.message : 'Unknown GAS error') : 'No response');
           }
         }
         return { count, chunks: allDataChunks };
@@ -383,9 +396,21 @@ async function fetchAllDataStreaming(gzipStream) {
     while (hasMore) {
       console.log(`  - กำลังดึงข้อมูล ${type} (เริ่มบรรทัดที่ ${start})...`);
       const url = `${gasUrl.trim()}?type=${type}&start=${start}&limit=${limit}`;
-      const res = await axios.get(url, { timeout: 300000 });
+      
+      let res;
+      try {
+        res = await axios.get(url, { timeout: 300000 });
+      } catch (err) {
+        if (start > 1) {
+           console.warn(`⚠️ Warning: Failed to fetch ${type} at start=${start} (${err.message}). Assuming end of data.`);
+           hasMore = false;
+           break;
+        } else {
+           throw err; // ถ้าหน้าแรกพังแปลว่าของจริง ให้โยน error ออกไป
+        }
+      }
 
-      if (res.data && res.data.status === 'ready') {
+      if (res && res.data && res.data.status === 'ready') {
         const arr = res.data.data || [];
         let startIdx = 0;
 
