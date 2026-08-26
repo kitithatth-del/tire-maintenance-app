@@ -316,6 +316,14 @@ async function fetchAllDataStreaming(gzipStream) {
 
   const stats = { changeCount: 0, checkCount: 0, receiveCount: 0, truckCount: 0, lastUpdated: null };
 
+  // 1. ดึง Master data ก่อนเพื่อน ตอนที่ RAM ยังว่างๆ
+  console.log('  - กำลังดึงข้อมูล Master (รถ/GPS)...');
+  const masterRes = await axios.get(`${gasUrl.trim()}?type=master`, { timeout: 300000 });
+  if (!masterRes.data || masterRes.data.status !== 'ready') throw new Error('Failed to fetch Master');
+  const truckMetadata = extractMetadataFromRaw(masterRes.data.truckDataRaw, masterRes.data.gpsDataRaw);
+  masterRes.data = null; // คืน RAM ทันที
+  stats.truckCount = Object.keys(truckMetadata).length;
+
   // ฟังก์ชันดึงข้อมูลทีละหน้าแล้ว write ลง stream เลย
   const fetchPagedStream = async (type, isFirst) => {
     let start = 1;
@@ -335,11 +343,9 @@ async function fetchAllDataStreaming(gzipStream) {
 
         if (arr.length > 0) {
           let chunkStr = JSON.stringify(arr);
-          // ตัด [ และ ] ออก เพื่อเอาแค่ข้อมูลข้างใน
           chunkStr = chunkStr.substring(1, chunkStr.length - 1);
 
           if (!firstPageOfType) {
-            // หน้าถัดไปของ type เดิม ต้องใส่ comma คั่น
             gzipStream.write(',');
           }
           gzipStream.write(chunkStr);
@@ -356,7 +362,7 @@ async function fetchAllDataStreaming(gzipStream) {
     return count;
   };
 
-  // เขียน JSON structure ทีละส่วน พร้อมดึงข้อมูลไปด้วย
+  // 2. เขียน JSON structure ทีละส่วน พร้อมดึงข้อมูลทีละหน้า
   gzipStream.write('{"changeData":[');
   stats.changeCount = await fetchPagedStream('change');
 
@@ -366,14 +372,6 @@ async function fetchAllDataStreaming(gzipStream) {
   gzipStream.write('],"receiveData":[');
   stats.receiveCount = await fetchPagedStream('receive');
 
-  // ดึง Master data
-  console.log('  - กำลังดึงข้อมูล Master (รถ/GPS)...');
-  const masterRes = await axios.get(`${gasUrl.trim()}?type=master`, { timeout: 300000 });
-  if (!masterRes.data || masterRes.data.status !== 'ready') throw new Error('Failed to fetch Master');
-  const truckMetadata = extractMetadataFromRaw(masterRes.data.truckDataRaw, masterRes.data.gpsDataRaw);
-  masterRes.data = null;
-
-  stats.truckCount = Object.keys(truckMetadata).length;
   stats.lastUpdated = new Date().toISOString();
 
   gzipStream.write('],"gpsData":[]');
