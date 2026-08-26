@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const zlib = require('zlib');
-const { fetchAllData } = require('./services/googleSheets');
+const { fetchAllDataStreaming } = require('./services/googleSheets');
 require('dotenv').config();
 
 const app = express();
@@ -11,12 +11,11 @@ app.use(cors());
 app.use(express.json());
 
 // Memory Cache สำหรับเก็บข้อมูลที่ดึงมาจาก Google Sheets
-let cachedData = {
-  receiveData: [],
-  changeData: [],
-  checkData: [],
-  gpsData: [],
-  truckData: {},
+let cachedStats = {
+  totalChangeTires: 0,
+  totalCheckTires: 0,
+  totalReceiveTires: 0,
+  totalTrucks: 0,
   lastUpdated: null,
   status: 'initializing' // 'initializing', 'ready', 'error'
 };
@@ -33,29 +32,41 @@ async function updateCache() {
   const timestamp = new Date().toLocaleTimeString('th-TH', { hour12: false });
   console.log(`[${timestamp}] เริ่มดึงข้อมูลจาก Google Sheets...`);
   try {
-    const data = await fetchAllData();
-    cachedData = {
-      ...data,
+    // สร้าง gzip stream ที่จะรับข้อมูลทีละชิ้น แทนการเก็บทั้งก้อนก่อน
+    const gzip = zlib.createGzip();
+    const outputChunks = [];
+    
+    gzip.on('data', (chunk) => outputChunks.push(chunk));
+    
+    const gzipDone = new Promise((resolve, reject) => {
+      gzip.on('end', resolve);
+      gzip.on('error', reject);
+    });
+
+    // ส่ง gzip writer เข้าไปใน fetchAllDataStreaming ให้มัน write ตรงๆ เลย
+    const stats = await fetchAllDataStreaming(gzip);
+    
+    // รอให้บีบอัดเสร็จ
+    await gzipDone;
+
+    cachedGzipBuffer = Buffer.concat(outputChunks);
+    outputChunks.length = 0; // เคลียร์ array
+
+    cachedStats = {
+      totalChangeTires: stats.changeCount || 0,
+      totalCheckTires: stats.checkCount || 0,
+      totalReceiveTires: stats.receiveCount || 0,
+      totalTrucks: stats.truckCount || 0,
+      lastUpdated: stats.lastUpdated,
       status: 'ready'
     };
-    
-    // บีบอัดข้อมูลเป็น Gzip ทันทีเพื่อประหยัด RAM และส่งข้อมูลได้เร็วระดับเสี้ยววินาที
-    const jsonStr = JSON.stringify({
-      changeData: cachedData.changeData,
-      checkData: cachedData.checkData,
-      receiveData: cachedData.receiveData,
-      gpsData: cachedData.gpsData,
-      truckData: cachedData.truckData,
-      lastUpdated: cachedData.lastUpdated
-    });
-    cachedGzipBuffer = zlib.gzipSync(jsonStr);
-    
+
     const ts2 = new Date().toLocaleTimeString('th-TH', { hour12: false });
-    console.log(`[${ts2}] ✅ อัปเดตข้อมูลสำเร็จ! (ขนาดบีบอัด: ${(cachedGzipBuffer.length / 1024 / 1024).toFixed(2)} MB) เปลี่ยนยาง:${cachedData.changeData.length} ตรวจเช็ค:${cachedData.checkData.length} รับยาง:${cachedData.receiveData.length}`);
+    console.log(`[${ts2}] ✅ อัปเดตข้อมูลสำเร็จ! (ขนาดบีบอัด: ${(cachedGzipBuffer.length / 1024 / 1024).toFixed(2)} MB)`);
   } catch (error) {
     console.error('❌ เกิดข้อผิดพลาดในการอัปเดตข้อมูล:', error.message);
-    if (cachedData.status === 'initializing') {
-      cachedData.status = 'error';
+    if (cachedStats.status === 'initializing') {
+      cachedStats.status = 'error';
     }
   } finally {
     isFetching = false;
@@ -80,12 +91,12 @@ app.listen(PORT, () => {
 // API เช็คสถานะเซิร์ฟเวอร์
 app.get('/api/status', (req, res) => {
   res.json({
-    status: cachedData.status,
-    lastUpdated: cachedData.lastUpdated,
-    totalChangeTires: cachedData.changeData ? cachedData.changeData.length : 0,
-    totalCheckTires: cachedData.checkData ? cachedData.checkData.length : 0,
-    totalReceiveTires: cachedData.receiveData ? cachedData.receiveData.length : 0,
-    totalTrucks: cachedData.truckData ? Object.keys(cachedData.truckData).length : 0,
+    status: cachedStats.status,
+    lastUpdated: cachedStats.lastUpdated,
+    totalChangeTires: cachedStats.totalChangeTires,
+    totalCheckTires: cachedStats.totalCheckTires,
+    totalReceiveTires: cachedStats.totalReceiveTires,
+    totalTrucks: cachedStats.totalTrucks,
   });
 });
 
@@ -97,10 +108,10 @@ app.get('/api/sync', async (req, res) => {
 
 // API ข้อมูลหลัก
 app.get('/api/data', (req, res) => {
-  if (cachedData.status === 'initializing') {
+  if (cachedStats.status === 'initializing') {
     return res.status(503).json({ error: 'ข้อมูลกำลังถูกโหลด กรุณารอสักครู่', status: 'initializing' });
   }
-  if (cachedData.status === 'error') {
+  if (cachedStats.status === 'error') {
     return res.status(503).json({ error: 'ไม่สามารถดึงข้อมูลได้', status: 'error' });
   }
 
@@ -112,12 +123,11 @@ app.get('/api/data', (req, res) => {
     return res.send(cachedGzipBuffer);
   }
 
-  res.json({
-    changeData: cachedData.changeData,
-    checkData: cachedData.checkData,
-    receiveData: cachedData.receiveData,
-    gpsData: cachedData.gpsData,
-    truckData: cachedData.truckData,
-    lastUpdated: cachedData.lastUpdated
-  });
+  if (cachedGzipBuffer) {
+    const unzipped = zlib.gunzipSync(cachedGzipBuffer);
+    res.set('Content-Type', 'application/json; charset=utf-8');
+    return res.send(unzipped);
+  }
+
+  res.status(500).json({ error: 'No data available' });
 });
