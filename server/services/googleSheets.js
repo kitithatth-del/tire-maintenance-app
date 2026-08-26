@@ -11,7 +11,19 @@ const MASTER_SHEET_ID = process.env.GPS_SHEET_ID;
 const normalizeTruckId = (t) => {
   if (!t) return '';
   let s = String(t).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  
+  // 1. หากขึ้นต้นด้วย N ตามด้วยตัวอักษร ให้ตัด N ทิ้ง (เช่น NPTL -> PTL)
+  s = s.replace(/^N(?=[A-Z])/, '');
+  
+  // 2. หากขึ้นต้นด้วย N, T, หรือ W ตามด้วยตัวเลข ให้ตัดตัวอักษรทิ้ง
   s = s.replace(/^[NTW](?=[0-9])/g, '');
+  
+  // 3. ตัดเลขศูนย์ที่อยู่หน้าสุดทิ้ง (เช่น 062 -> 62)
+  s = s.replace(/^0+(?=\d)/, '');
+  
+  // 4. ตัดเลขศูนย์ที่ตามหลังตัวอักษรทันที (เช่น PTL062 -> PTL62, DEL01 -> DEL1)
+  s = s.replace(/([A-Z])0+(?=\d)/g, '$1');
+  
   return s;
 };
 
