@@ -378,8 +378,21 @@ async function fetchAllDataStreaming(gzipStream) {
 
   // 1. ดึง Master data ก่อนเพื่อน ตอนที่ RAM ยังว่างๆ
   console.log('  - กำลังดึงข้อมูล Master (รถ/GPS)...');
-  const masterRes = await axios.get(`${gasUrl.trim()}?type=master`, { timeout: 300000 });
-  if (!masterRes.data || masterRes.data.status !== 'ready') throw new Error('Failed to fetch Master');
+  let masterRes;
+  try {
+    masterRes = await axios.get(`${gasUrl.trim()}?type=master`, { timeout: 300000 });
+  } catch (err) {
+    let errorDetails = err.message;
+    if (err.response) {
+      errorDetails = `Status: ${err.response.status}, Body: ${typeof err.response.data === 'object' ? JSON.stringify(err.response.data) : err.response.data}`;
+    }
+    throw new Error(`Failed to fetch Master data. Error: ${errorDetails}`);
+  }
+
+  if (!masterRes.data || masterRes.data.status !== 'ready') {
+    throw new Error(`Failed to fetch Master: ${masterRes.data ? masterRes.data.message : 'No valid response'}`);
+  }
+  
   const truckMetadata = extractMetadataFromRaw(masterRes.data.truckDataRaw, masterRes.data.gpsDataRaw);
   masterRes.data = null; // คืน RAM ทันที
   stats.truckCount = Object.keys(truckMetadata).length;
