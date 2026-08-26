@@ -92,16 +92,50 @@ const extractMetadataFromRaw = (truckDataRaw, gpsDataRaw) => {
         if (tabienIdx !== -1 && row[tabienIdx]) {
           const tabienStr = String(row[tabienIdx]).trim();
           let plate = null;
-          const match = tabienStr.match(/\(([^)]+)\)/);
-          if (match) plate = match[1].trim();
-          else plate = tabienStr.replace(/[^0-9ก-ฮ]/g, '');
-          
-          targetTruckNo = Object.keys(metadata).find(k => {
-             const mPlate = metadata[k].plate;
-             if (!mPlate) return false;
-             // เทียบเฉพาะตัวเลขทะเบียนเพื่อความแม่นยำ (เช่น 70-1234 จะเทียบเจอ 701234)
-             return mPlate.replace(/[^0-9]/g, '') === plate.replace(/[^0-9]/g, '');
-          });
+          let extractedTruckNo = null;
+
+          // 1. ลองดึงเบอร์รถจากหน้าวงเล็บ (เช่น "No.193(..." หรือ "PTL.932(...")
+          const truckMatch = tabienStr.match(/^(?:No\.?\s*)?([A-Za-z0-9\.]+)\(/i);
+          if (truckMatch) {
+             extractedTruckNo = truckMatch[1].trim(); // ได้ 193 หรือ PTL.932
+          }
+
+          // 2. ดึงทะเบียนในวงเล็บ
+          const plateMatch = tabienStr.match(/\(([^)]+)\)/);
+          if (plateMatch) {
+             plate = plateMatch[1].trim();
+          } else {
+             plate = tabienStr; // กรณีเป็นทะเบียนเพียวๆ
+          }
+
+          // พยายามหาจากเบอร์รถที่แกะได้ก่อน (แม่นยำที่สุด)
+          if (extractedTruckNo) {
+             const normExtracted = normalizeTruckId(extractedTruckNo);
+             if (metadata[normExtracted]) {
+                targetTruckNo = normExtracted;
+             }
+          }
+
+          // ถ้ายังหาไม่เจอ ให้หาจากทะเบียนรถ
+          if (!targetTruckNo && plate) {
+             const cleanSearchPlate = plate.replace(/[^0-9ก-ฮa-zA-Z]/g, '');
+             const numSearchPlate = plate.replace(/[^0-9]/g, '');
+
+             targetTruckNo = Object.keys(metadata).find(k => {
+                const mPlate = metadata[k].plate;
+                if (!mPlate) return false;
+                const cleanMPlate = mPlate.replace(/[^0-9ก-ฮa-zA-Z]/g, '');
+                
+                // เทียบแบบตัวอักษรเป๊ะๆ (ลบขีด ลบช่องว่าง)
+                if (cleanMPlate === cleanSearchPlate) return true;
+
+                // กรณีตัวอักษรพิมพ์ผิด แต่เลขตรงกันเป๊ะ (และเลขยาวพอสมควร)
+                const numMPlate = mPlate.replace(/[^0-9]/g, '');
+                if (numSearchPlate.length >= 4 && numSearchPlate === numMPlate) return true;
+
+                return false;
+             });
+          }
         }
 
         // หากหาด้วยทะเบียนไม่เจอ ให้ลองดูคอลัมน์ A หรือคอลัมน์ที่มีคำว่า 'เบอร์รถ' 
