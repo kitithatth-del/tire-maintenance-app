@@ -7,7 +7,18 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+// ตั้งค่า CORS ล็อคให้เฉพาะเว็บแอปของคุณ (Vercel) และ localhost ดึงข้อมูลได้เท่านั้น
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || origin.includes('vercel.app') || origin.includes('localhost')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Blocked by CORS Security Policy'));
+    }
+  }
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Memory Cache สำหรับเก็บข้อมูลที่ดึงมาจาก Google Sheets
