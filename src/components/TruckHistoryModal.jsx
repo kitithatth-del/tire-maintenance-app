@@ -174,7 +174,7 @@ const TruckHistoryModal = ({ truckNumber, data, truckMetadata, onClose }) => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'var(--overlay-10)', padding: '0.3rem 0.75rem', borderRadius: '9999px', border: '1px solid var(--border-medium)' }}>
                           <Gauge size={14} color="var(--text-secondary)" />
                           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>เลขไมล์:</span>
-                          <span style={{ fontWeight: 700, color: 'var(--accent-secondary)' }}>{visit.mileage ? visit.mileage.toLocaleString() : '-'}</span>
+                          <span style={{ fontWeight: 700, color: 'var(--accent-secondary)' }}>{visit.mileage && !isNaN(Number(visit.mileage)) ? Number(visit.mileage).toLocaleString() : '-'}</span>
                         </div>
                       </div>
 
