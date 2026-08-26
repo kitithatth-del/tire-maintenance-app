@@ -45,40 +45,53 @@ async function updateCache() {
     };
     
     if (data.useChunks) {
-      const buffers = [];
-      buffers.push(Buffer.from('{"changeData":[', 'utf8'));
+      // ใช้ Streaming เพื่อบีบอัดข้อมูลทีละชิ้น ลดการใช้ RAM สูงสุด
+      const gzip = zlib.createGzip();
+      const chunks = [];
+      
+      gzip.on('data', (chunk) => chunks.push(chunk));
+      
+      const gzipPromise = new Promise((resolve, reject) => {
+        gzip.on('end', () => {
+          cachedGzipBuffer = Buffer.concat(chunks);
+          resolve();
+        });
+        gzip.on('error', reject);
+      });
+
+      gzip.write('{"changeData":[');
       if (data.changeChunks) {
         for (let i = 0; i < data.changeChunks.length; i++) {
-          buffers.push(Buffer.from(data.changeChunks[i], 'utf8'));
-          if (i < data.changeChunks.length - 1) buffers.push(Buffer.from(',', 'utf8'));
+          gzip.write(data.changeChunks[i]);
+          if (i < data.changeChunks.length - 1) gzip.write(',');
         }
       }
       data.changeChunks = null;
 
-      buffers.push(Buffer.from('],"checkData":[', 'utf8'));
+      gzip.write('],"checkData":[');
       if (data.checkChunks) {
         for (let i = 0; i < data.checkChunks.length; i++) {
-          buffers.push(Buffer.from(data.checkChunks[i], 'utf8'));
-          if (i < data.checkChunks.length - 1) buffers.push(Buffer.from(',', 'utf8'));
+          gzip.write(data.checkChunks[i]);
+          if (i < data.checkChunks.length - 1) gzip.write(',');
         }
       }
       data.checkChunks = null;
 
-      buffers.push(Buffer.from('],"receiveData":[', 'utf8'));
+      gzip.write('],"receiveData":[');
       if (data.receiveChunks) {
         for (let i = 0; i < data.receiveChunks.length; i++) {
-          buffers.push(Buffer.from(data.receiveChunks[i], 'utf8'));
-          if (i < data.receiveChunks.length - 1) buffers.push(Buffer.from(',', 'utf8'));
+          gzip.write(data.receiveChunks[i]);
+          if (i < data.receiveChunks.length - 1) gzip.write(',');
         }
       }
       data.receiveChunks = null;
 
-      buffers.push(Buffer.from('],"gpsData":' + (data.gpsDataString || '[]'), 'utf8'));
-      buffers.push(Buffer.from(',"truckData":' + (data.truckDataString || '{}'), 'utf8'));
-      buffers.push(Buffer.from(',"lastUpdated":"' + data.lastUpdated + '"}', 'utf8'));
+      gzip.write('],"gpsData":' + (data.gpsDataString || '[]'));
+      gzip.write(',"truckData":' + (data.truckDataString || '{}'));
+      gzip.write(',"lastUpdated":"' + data.lastUpdated + '"}');
+      gzip.end();
 
-      const finalBuffer = Buffer.concat(buffers);
-      cachedGzipBuffer = zlib.gzipSync(finalBuffer);
+      await gzipPromise;
       data = null;
     } else if (data.isPreStringified) {
       let jsonStr = '{"changeData":' + data.changeDataString;
