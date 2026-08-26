@@ -85,29 +85,44 @@ const extractMetadataFromRaw = (truckDataRaw, gpsDataRaw) => {
       for (let i = headerIdx + 1; i < rawRows.length; i++) {
         const row = rawRows[i];
         if (!row) continue;
-        let targetTruckNo = (row[0] !== null && row[0] !== undefined && String(row[0]).trim() !== '') ? String(row[0]).trim() : null;
-        const status = (statusIdx !== -1 && row[statusIdx]) ? String(row[statusIdx]).trim() : null;
-        const loc = (locIdx !== -1 && row[locIdx]) ? String(row[locIdx]).trim() : null;
-        const timeVal = (timeIdx !== -1 && row[timeIdx]) ? row[timeIdx] : null;
-        let timeStr = timeVal ? String(timeVal).trim() : null;
-        if (!targetTruckNo && row[tabienIdx]) {
+        
+        let targetTruckNo = null;
+
+        // ดึงค่าทะเบียนรถเพื่อใช้เทียบ
+        if (tabienIdx !== -1 && row[tabienIdx]) {
           const tabienStr = String(row[tabienIdx]).trim();
           let plate = null;
           const match = tabienStr.match(/\(([^)]+)\)/);
           if (match) plate = match[1].trim();
           else plate = tabienStr.replace(/[^0-9ก-ฮ]/g, '');
+          
           targetTruckNo = Object.keys(metadata).find(k => {
              const mPlate = metadata[k].plate;
              if (!mPlate) return false;
+             // เทียบเฉพาะตัวเลขทะเบียนเพื่อความแม่นยำ (เช่น 70-1234 จะเทียบเจอ 701234)
              return mPlate.replace(/[^0-9]/g, '') === plate.replace(/[^0-9]/g, '');
           });
         }
+
+        // หากหาด้วยทะเบียนไม่เจอ ให้ลองดูคอลัมน์ A หรือคอลัมน์ที่มีคำว่า 'เบอร์รถ' 
+        if (!targetTruckNo) {
+          const possibleTruckNoIdx = headers.findIndex(c => c && String(c).replace(/\s+/g, '').includes('เบอร์รถ'));
+          const rawId = (possibleTruckNoIdx !== -1 && row[possibleTruckNoIdx]) ? String(row[possibleTruckNoIdx]).trim() : ((row[0]) ? String(row[0]).trim() : null);
+          if (rawId && metadata[normalizeTruckId(rawId)]) {
+            targetTruckNo = normalizeTruckId(rawId);
+          }
+        }
+
+        const status = (statusIdx !== -1 && row[statusIdx]) ? String(row[statusIdx]).trim() : null;
+        const loc = (locIdx !== -1 && row[locIdx]) ? String(row[locIdx]).trim() : null;
+        const timeVal = (timeIdx !== -1 && row[timeIdx]) ? row[timeIdx] : null;
+        let timeStr = timeVal ? String(timeVal).trim() : null;
+
         if (targetTruckNo) {
-          const truckNo = normalizeTruckId(targetTruckNo) || targetTruckNo;
-          if (!metadata[truckNo]) metadata[truckNo] = {};
-          if (status) metadata[truckNo].gpsStatus = status;
-          if (loc) metadata[truckNo].gpsLocation = loc;
-          if (timeStr) metadata[truckNo].gpsTime = timeStr;
+          if (!metadata[targetTruckNo]) metadata[targetTruckNo] = {};
+          if (status) metadata[targetTruckNo].gpsStatus = status;
+          if (loc) metadata[targetTruckNo].gpsLocation = loc;
+          if (timeStr) metadata[targetTruckNo].gpsTime = timeStr;
         }
       }
     }
