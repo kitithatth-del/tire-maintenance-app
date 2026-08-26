@@ -122,8 +122,9 @@ const extractMetadataFromRaw = (truckDataRaw, gpsDataRaw) => {
 const getTireDataFromRaw = (rawData) => {
   if (!rawData || rawData.length === 0) return [];
 
+  // รูปแบบที่ 2: Array of Objects แล้ว — return ตรงๆ (fallback)
   if (rawData.length > 0 && !Array.isArray(rawData[0])) {
-    return rawData;
+    return rawData.filter(row => row && typeof row === 'object');
   }
 
   // รูปแบบที่ 1: Array of Arrays (จาก GAS หรือ XLSX)
@@ -244,31 +245,23 @@ async function fetchAllData() {
     console.log('🔄 เริ่มดึงข้อมูลทั้งหมดผ่าน Google Apps Script Web App (แบบ Pagination)...');
     try {
       const fetchPaged = async (type) => {
-        const allDataChunks = [];
+        let allData = [];
         let start = 1;
         const limit = 10000;
         let hasMore = true;
-        let count = 0;
         while (hasMore) {
           console.log(`  - กำลังดึงข้อมูล ${type} (เริ่มบรรทัดที่ ${start})...`);
           const url = `${gasUrl.trim()}?type=${type}&start=${start}&limit=${limit}`;
           const res = await axios.get(url, { timeout: 300000 });
           if (res.data && res.data.status === 'ready') {
-            const arr = res.data.data || [];
-            count += arr.length;
-            if (arr.length > 0) {
-              let chunkStr = JSON.stringify(arr);
-              chunkStr = chunkStr.substring(1, chunkStr.length - 1);
-              allDataChunks.push(chunkStr);
-            }
+            allData = allData.concat(res.data.data);
             hasMore = res.data.hasMore;
             start = res.data.nextStart || (start + limit);
-            res.data = null;
           } else {
             throw new Error(res.data ? res.data.message : 'Unknown GAS error');
           }
         }
-        return { count, chunks: allDataChunks };
+        return allData;
       };
 
       const receiveData = await fetchPaged('receive');
@@ -282,178 +275,93 @@ async function fetchAllData() {
       const gpsDataRaw = masterRes.data.gpsDataRaw;
 
       const truckMetadata = extractMetadataFromRaw(truckDataRaw, gpsDataRaw);
+      // GAS ส่งมาเป็น Array of Objects แล้ว ใช้ getTireDataFromRaw สำหรับ normalize key เท่านั้น
+      const parsedReceive = getTireDataFromRaw(receiveData);
+      const parsedChange = getTireDataFromRaw(changeData);
+      const parsedCheck = getTireDataFromRaw(checkData);
 
-      console.log(`🎉 ดึงข้อมูลผ่าน GAS สำเร็จ 100%! เปลี่ยนยาง: ${changeData.count} | ตรวจเช็ค: ${checkData.count} | รับยาง: ${receiveData.count} | รถ: ${Object.keys(truckMetadata).length}`);
+      console.log(`🎉 ดึงข้อมูลผ่าน GAS สำเร็จ 100%! เปลี่ยนยาง: ${parsedChange.length} | ตรวจเช็ค: ${parsedCheck.length} | รับยาง: ${parsedReceive.length} | รถ: ${Object.keys(truckMetadata).length}`);
 
       return {
-        receiveChunks: receiveData.chunks,
-        changeChunks: changeData.chunks,
-        checkChunks: checkData.chunks,
-        receiveCount: receiveData.count,
-        changeCount: changeData.count,
-        checkCount: checkData.count,
-        gpsDataString: '[]',
-        truckDataString: JSON.stringify(truckMetadata),
-        truckCount: Object.keys(truckMetadata).length,
-        lastUpdated: new Date().toISOString(),
-        useChunks: true
+        receiveData: parsedReceive,
+        changeData: parsedChange,
+        checkData: parsedCheck,
+        gpsData: [],
+        truckData: truckMetadata,
+        lastUpdated: new Date().toISOString()
       };
     } catch (err) {
       console.warn('⚠️ การดึงข้อมูลผ่าน GAS ล้มเหลว สลับไปใช้วิธีดาวน์โหลด XLSX:', err.message);
     }
   }
-  throw new Error('GAS_WEB_APP_URL not configured');
-}
 
-// ฟังก์ชันใหม่: เขียนข้อมูลตรงเข้า gzip stream ทีละหน้า ไม่เก็บไว้ใน RAM
-async function fetchAllDataStreaming(gzipStream) {
-  const gasUrl = process.env.GAS_WEB_APP_URL;
-  if (!gasUrl || gasUrl.trim() === '') {
-    throw new Error('GAS_WEB_APP_URL not configured');
+  console.log('🔄 เริ่มดึงข้อมูลทั้งหมด (Google Drive XLSX Downloader)...');
+  
+  if (!TIRE_SHEET_ID || !MASTER_SHEET_ID) {
+    throw new Error('❌ ไม่พบ ID ของ Google Sheets ในไฟล์ .env');
   }
 
-  console.log('🔄 เริ่มดึงข้อมูลผ่าน GAS (Streaming Mode)...');
+  const auth = new GoogleAuth({
+    keyFile: path.join(__dirname, '..', 'credentials.json'),
+    scopes: ['https://www.googleapis.com/auth/drive.readonly']
+  });
+  const client = await auth.getClient();
+  const token = (await client.getAccessToken()).token;
 
-  const stats = { changeCount: 0, checkCount: 0, receiveCount: 0, truckCount: 0, lastUpdated: null };
+  const tireFile = path.join(__dirname, '..', 'tire_temp.xlsx');
+  const masterFile = path.join(__dirname, '..', 'master_temp.xlsx');
 
-  // 1. ดึง Master data ก่อนเพื่อน ตอนที่ RAM ยังว่างๆ
-  console.log('  - กำลังดึงข้อมูล Master (รถ/GPS)...');
-  const masterRes = await axios.get(`${gasUrl.trim()}?type=master`, { timeout: 300000 });
-  if (!masterRes.data || masterRes.data.status !== 'ready') throw new Error('Failed to fetch Master');
-  const truckMetadata = extractMetadataFromRaw(masterRes.data.truckDataRaw, masterRes.data.gpsDataRaw);
-  masterRes.data = null; // คืน RAM ทันที
-  stats.truckCount = Object.keys(truckMetadata).length;
+  try {
+    console.log('  ⬇️ กำลังดาวน์โหลดไฟล์สเปรดชีตเรื่องยาง (XLSX)...');
+    await downloadXlsx(token, TIRE_SHEET_ID, tireFile);
+    console.log('  ⬇️ กำลังดาวน์โหลดไฟล์สเปรดชีตข้อมูลรถและ GPS (XLSX)...');
+    await downloadXlsx(token, MASTER_SHEET_ID, masterFile);
 
-  // ฟังก์ชันดึงข้อมูลทีละหน้าแล้ว write ลง stream เลย
-  const fetchPagedStream = async (type, isFirst) => {
-    let start = 1;
-    const limit = 10000;
-    let hasMore = true;
-    let count = 0;
-    let firstPageOfType = true;
-    let colKeys = []; // เก็บ headers ไว้ใช้ข้ามหน้า
+    console.log('  ⚙️ กำลังอ่านและแปลงข้อมูล...');
+    
+    const tireWb = xlsx.readFile(tireFile);
+    const masterWb = xlsx.readFile(masterFile);
 
-    while (hasMore) {
-      console.log(`  - กำลังดึงข้อมูล ${type} (เริ่มบรรทัดที่ ${start})...`);
-      const url = `${gasUrl.trim()}?type=${type}&start=${start}&limit=${limit}`;
-      const res = await axios.get(url, { timeout: 300000 });
+    const receiveRaw = xlsx.utils.sheet_to_json(tireWb.Sheets['รับยางเข้า'], { header: 1 });
+    const changeRaw = xlsx.utils.sheet_to_json(tireWb.Sheets['ข้อมูลเปลี่ยนยาง'], { header: 1 });
+    const checkRaw = xlsx.utils.sheet_to_json(tireWb.Sheets['ตรวจเช็คลมยางดอกยาง'], { header: 1 });
+    const truckRaw = xlsx.utils.sheet_to_json(masterWb.Sheets['Data รถ'], { header: 1 });
+    const gpsRaw = xlsx.utils.sheet_to_json(masterWb.Sheets['GPS สถานที่ปัจจุบัน'], { header: 1 });
 
-      if (res.data && res.data.status === 'ready') {
-        const arr = res.data.data || [];
-        let startIdx = 0;
+    const truckMetadata = extractMetadataFromRaw(truckRaw, gpsRaw);
+    const receiveData = getTireDataFromRaw(receiveRaw);
+    const changeData = getTireDataFromRaw(changeRaw);
+    const checkData = getTireDataFromRaw(checkRaw);
 
-        if (arr.length > 0) {
-          if (firstPageOfType) {
-            let headerRowIdx = -1;
-            let groupHeaderRow = null;
-            for (let i = 0; i < Math.min(arr.length, 5); i++) {
-              if (arr[i] && arr[i].some(c => c && String(c).replace(/\s+/g,'') === 'วันที่บันทึก')) {
-                headerRowIdx = i; break;
-              }
-            }
-            if (headerRowIdx > 0) {
-              const prev = arr[headerRowIdx - 1];
-              if (prev && prev.some(c => c && (String(c).includes('ยางเข้า') || String(c).includes('ยางออก')))) {
-                groupHeaderRow = prev;
-              }
-            }
-            if (headerRowIdx === -1) headerRowIdx = 1;
-            
-            const headers = arr[headerRowIdx] || [];
-            const seenNames = {};
-            let currentGroup = '';
-            for (let j = 0; j < headers.length; j++) {
-              if (groupHeaderRow && groupHeaderRow[j]) {
-                const g = String(groupHeaderRow[j]).trim();
-                if (g.includes('ยางเข้า') || g.includes('ตรวจเช็ค')) currentGroup = 'เข้า';
-                else if (g.includes('ยางออก')) currentGroup = 'ออก';
-              }
-              let key = headers[j];
-              if (key === undefined || key === null) { colKeys.push(null); continue; }
-              key = String(key).replace(/\r\n/g, '').replace(/\n/g, '').trim();
-              if (!key || key === '#REF!' || key === '#N/A') { colKeys.push(null); continue; }
-              
-              const tireGroupFields = ['หมายเลขยาง', 'D1', 'D2', 'D3', 'D4', 'ชนิด/ขนาดยาง'];
-              if (tireGroupFields.includes(key) && currentGroup) key = `${key}_${currentGroup}`;
-              
-              if (key === 'หมายเลขยาง') key = 'หมายเลขยาง_เข้า';
-              if (key === 'หมายเลขยาง_1') key = 'หมายเลขยาง_ออก';
-              if (key === 'D1_1') key = 'D1_ออก';
-              if (key === 'D2_1') key = 'D2_ออก';
-              if (key === 'D3_1') key = 'D3_ออก';
-              if (key === 'D4_1') key = 'D4_ออก';
-              if (key === 'ชนิด/ขนาดยาง') key = 'ชนิด/ขนาดยาง_เข้า';
-              if (key === 'ชนิด/ขนาดยาง_1') key = 'ชนิด/ขนาดยาง_ออก';
-              if (key === 'แรงดันก่อน\n(PSI)' || key === 'แรงดันก่อน(PSI)') key = 'แรงดันก่อน(PSI)';
-              if (key === 'แรงดันหลัง\n(PSI)' || key === 'แรงดันหลัง(PSI)') key = 'แรงดันหลัง(PSI)';
-              if (key === 'ตำแหน่ง\nล้อยาง' || key === 'ตำแหน่งล้อยาง') key = 'ตำแหน่งล้อยาง';
-              
-              if (seenNames[key]) { colKeys.push(`__dup_${key}`); continue; }
-              seenNames[key] = true;
-              colKeys.push(key);
-            }
-            startIdx = headerRowIdx + 1;
-          }
+    console.log(`🎉 ดึงข้อมูลสำเร็จ 100%! เปลี่ยนยาง: ${changeData.length} | ตรวจเช็ค: ${checkData.length} | รับยาง: ${receiveData.length} | รถ: ${Object.keys(truckMetadata).length}`);
 
-          const transformed = [];
-          for (let i = startIdx; i < arr.length; i++) {
-            const row = arr[i];
-            if (!row) continue;
-            const nonEmpty = row.some(c => c !== null && c !== undefined && String(c).trim() !== '');
-            if (!nonEmpty) continue;
-            
-            let obj = {};
-            for (let j = 0; j < colKeys.length; j++) {
-              const k = colKeys[j];
-              if (!k || k.startsWith('__dup_')) continue;
-              const val = row[j];
-              obj[k] = (val === undefined || val === null || val === '') ? null : String(val).trim();
-            }
-            transformed.push(obj);
-          }
-
-          count += transformed.length;
-
-          if (transformed.length > 0) {
-            let chunkStr = JSON.stringify(transformed);
-            chunkStr = chunkStr.substring(1, chunkStr.length - 1);
-            if (!firstPageOfType) {
-              gzipStream.write(',');
-            }
-            gzipStream.write(chunkStr);
-            firstPageOfType = false;
-          }
-        }
-
-        hasMore = res.data.hasMore;
-        start = res.data.nextStart || (start + limit);
-        res.data = null; // คืน RAM ทันที
-      } else {
-        throw new Error(res.data ? res.data.message : `Unknown GAS error for type ${type}`);
-      }
+    // Clean up temporary files
+    try {
+      fs.unlinkSync(tireFile);
+      fs.unlinkSync(masterFile);
+    } catch (e) {
+      // ignore
     }
-    return count;
-  };
 
-  // 2. เขียน JSON structure ทีละส่วน พร้อมดึงข้อมูลทีละหน้า
-  gzipStream.write('{"changeData":[');
-  stats.changeCount = await fetchPagedStream('change');
-
-  gzipStream.write('],"checkData":[');
-  stats.checkCount = await fetchPagedStream('check');
-
-  gzipStream.write('],"receiveData":[');
-  stats.receiveCount = await fetchPagedStream('receive');
-
-  stats.lastUpdated = new Date().toISOString();
-
-  gzipStream.write('],"gpsData":[]');
-  gzipStream.write(`,"truckData":${JSON.stringify(truckMetadata)}`);
-  gzipStream.write(`,"lastUpdated":"${stats.lastUpdated}"}`);
-  gzipStream.end();
-
-  console.log(`🎉 Streaming สำเร็จ! เปลี่ยนยาง: ${stats.changeCount} | ตรวจเช็ค: ${stats.checkCount} | รับยาง: ${stats.receiveCount} | รถ: ${stats.truckCount}`);
-  return stats;
+    return {
+      receiveData,
+      changeData,
+      checkData,
+      gpsData: [],
+      truckData: truckMetadata,
+      lastUpdated: new Date().toISOString()
+    };
+  } catch (error) {
+    // Clean up temporary files on error
+    try {
+      if (fs.existsSync(tireFile)) fs.unlinkSync(tireFile);
+      if (fs.existsSync(masterFile)) fs.unlinkSync(masterFile);
+    } catch (e) {
+      // ignore
+    }
+    console.error('❌ เกิดข้อผิดพลาดในการดึงข้อมูล:', error.message);
+    throw error;
+  }
 }
 
-module.exports = { fetchAllData, fetchAllDataStreaming };
+module.exports = { fetchAllData };
