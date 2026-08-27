@@ -1862,7 +1862,7 @@ function PlanningInner({ data, rawData, truckMetadata, onTireClick, onTruckClick
 
   {/* Top 5 Critical Fleets */ }
   < div className = "glass-panel" style = {{ padding: '1.5rem', borderRadius: '16px', background: 'var(--overlay-black-30)' }}>
-              <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>🔝 5 สังกัดที่มียางวิกฤตมากที่สุด</h3>
+              <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>5 สังกัดที่มียางวิกฤตมากที่สุด</h3>
               <p style={{ margin: '-0.5rem 0 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>เรียงตามจำนวนยางเปลี่ยนทันที (≤ 2 มม.)</p>
 {
   dashboardData.top5Critical.length > 0 ? (
