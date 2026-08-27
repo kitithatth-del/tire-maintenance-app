@@ -1034,11 +1034,22 @@ export const getDashboardStats = (processedData, filters = {}) => {
 // ============================================================
 export const getFilterOptions = (data) => {
   const years = [...new Set(data.map(r => String(r.YYYY)).filter(y => y && y !== 'undefined' && y !== 'NaN'))].sort((a, b) => Number(b) - Number(a));
-  const centers = [...new Set(data.map(r => r["ศูนย์บริการ"]).filter(Boolean))].sort();
+  
+  // Filter out garbage values from centers (e.g. dates, numbers, tire brands)
+  let centers = [...new Set(data.map(r => r["ศูนย์บริการ"]).filter(Boolean))];
+  centers = centers.filter(c => {
+    const s = String(c).trim();
+    if (/^\d+$/.test(s)) return false; // Ignore pure numbers like '13'
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return false; // Ignore dates like '26/07/2023'
+    if (s.match(/BRIDGESTONE|MICHELIN|MAXIS|DEESTONE|OTANI|GOODYEAR|Tyre|Tire/i)) return false; // Ignore tire brands
+    return true;
+  }).sort();
+
   const units = [...new Set(data.map(r => r["สังกัดรถ"]).filter(Boolean))].sort();
   const reasons = [...new Set(data.map(r => r["สาเหตุที่ถอด"]).filter(Boolean))].sort();
   const statuses = [...new Set(data.map(r => r["สถานะยางออก"]).filter(Boolean))].sort();
   const formTypes = [...new Set(data.map(r => r["ประเภทแบบฟอร์ม"]).filter(Boolean))].sort();
+  
   return { years, centers, units, reasons, statuses, formTypes };
 };
 
