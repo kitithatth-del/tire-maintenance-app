@@ -277,8 +277,9 @@ const TireHistoryModal = ({ tireNumber, data, onClose }) => {
                       }}>
                         <div style={{ background: cardBg, padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                           {/* Header of card */}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-                            <div style={{ flex: '1 1 auto', minWidth: '150px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* Header of card */}
+                            <div>
                               <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                                 <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: iconColor }}>
                                   {isInstalled 
@@ -294,38 +295,41 @@ const TireHistoryModal = ({ tireNumber, data, onClose }) => {
                               </div>
                             </div>
                             
-                            <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-                              {/* Tire Pressure badge */}
-                              {evt.pressure && (
-                                <div style={{
-                                  background: 'var(--overlay-05)',
-                                  border: '1px solid var(--border-medium)',
-                                  borderRadius: '10px', padding: '0.4rem 0.8rem',
-                                  display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                  minWidth: '70px'
-                                }}>
-                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>ลมยาง</span>
-                                  <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                                    {evt.pressure} <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>PSI</span>
-                                  </span>
-                                </div>
-                              )}
-                              {/* Tread depth badge */}
-                              {evt.tread !== null && (
-                                <div style={{
-                                  background: evt.tread < 2.0 ? 'rgba(239,68,68,0.1)' : 'var(--overlay-05)',
-                                  border: `1px solid ${evt.tread < 2.0 ? 'rgba(239,68,68,0.3)' : 'var(--border-medium)'}`,
-                                  borderRadius: '10px', padding: '0.4rem 0.8rem',
-                                  display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                  minWidth: '85px'
-                                }}>
-                                  <span style={{ fontSize: '0.7rem', color: evt.tread < 2.0 ? '#ef4444' : 'var(--text-secondary)' }}>ดอกยางเฉลี่ย</span>
-                                  <span style={{ fontSize: '1.15rem', fontWeight: 800, color: evt.tread < 2.0 ? '#ef4444' : 'var(--text-primary)' }}>
-                                    {evt.tread} <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>มม.</span>
-                                  </span>
-                                </div>
-                              )}
-                            </div>
+                            {/* Badges Row */}
+                            {(evt.pressure || evt.tread !== null) && (
+                              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                {/* Tire Pressure badge */}
+                                {evt.pressure && (
+                                  <div style={{
+                                    background: 'var(--overlay-05)',
+                                    border: '1px solid var(--border-medium)',
+                                    borderRadius: '10px', padding: '0.5rem 1rem',
+                                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                                    minWidth: '100px'
+                                  }}>
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ลมยาง (PSI)</span>
+                                    <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '2px' }}>
+                                      {evt.pressure}
+                                    </span>
+                                  </div>
+                                )}
+                                {/* Tread depth badge */}
+                                {evt.tread !== null && (
+                                  <div style={{
+                                    background: evt.tread < 2.0 ? 'rgba(239,68,68,0.1)' : 'var(--overlay-05)',
+                                    border: `1px solid ${evt.tread < 2.0 ? 'rgba(239,68,68,0.3)' : 'var(--border-medium)'}`,
+                                    borderRadius: '10px', padding: '0.5rem 1rem',
+                                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                                    minWidth: '100px'
+                                  }}>
+                                    <span style={{ fontSize: '0.75rem', color: evt.tread < 2.0 ? '#ef4444' : 'var(--text-secondary)' }}>ดอกยางเฉลี่ย (มม.)</span>
+                                    <span style={{ fontSize: '1.25rem', fontWeight: 800, color: evt.tread < 2.0 ? '#ef4444' : 'var(--text-primary)', marginTop: '2px' }}>
+                                      {evt.tread}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {/* Truck Info Grid */}
