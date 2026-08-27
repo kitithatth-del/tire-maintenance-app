@@ -280,58 +280,78 @@ const TireHistoryModal = ({ tireNumber, data, onClose }) => {
                       }}>
                         <div style={{ background: `linear-gradient(135deg, ${cardBg} 0%, transparent 100%)`, padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                           
-                          {/* Header of card */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                          {/* Header of card with Badges on top right */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+                            
+                            {/* Left: Action Title, Tire Serial, Date */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', flex: '1 1 auto', minWidth: '150px' }}>
                               <h4 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: iconColor, letterSpacing: '-0.01em' }}>
                                 {isInstalled 
                                   ? (evt.formType?.includes('สลับยาง') ? 'สลับยาง (เปลี่ยนตำแหน่ง)' : 'ติดตั้งเข้าสู่รถ') 
                                   : isInspection ? 'ตรวจเช็คสภาพยาง' : 'ถอดออกจากรถ'}
                               </h4>
-                              <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)', background: 'rgba(255,255,255,0.08)', padding: '4px 12px', borderRadius: '20px', fontFamily: 'monospace', fontWeight: 600, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)' }}>
-                                {evt.tireId}
-                              </span>
+                              
+                              {/* Tire Serial (Moved below title) */}
+                              <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <span style={{
+                                  fontSize: '0.82rem',
+                                  color: 'var(--text-primary)',
+                                  background: 'rgba(255,255,255,0.06)',
+                                  border: '1px solid rgba(255,255,255,0.1)',
+                                  padding: '2px 8px',
+                                  borderRadius: '6px',
+                                  fontFamily: 'monospace',
+                                  fontWeight: 600,
+                                  letterSpacing: '0.02em'
+                                }}>
+                                  {evt.tireId}
+                                </span>
+                              </div>
+
+                              {/* Date */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 500, marginTop: '2px' }}>
+                                <Calendar size={15} /> {evt.dateStr || 'ไม่ระบุวันที่'}
+                              </div>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--text-secondary)', fontSize: '0.95rem', fontWeight: 500 }}>
-                              <Calendar size={16} /> {evt.dateStr || 'ไม่ระบุวันที่'}
-                            </div>
+                            
+                            {/* Right: Badges for Pressure & Tread */}
+                            {(evt.pressure || evt.tread !== null) && (
+                              <div style={{ display: 'flex', gap: '0.6rem', flexShrink: 0, alignItems: 'flex-start' }}>
+                                {/* Tire Pressure badge */}
+                                {evt.pressure && (
+                                  <div style={{
+                                    background: 'rgba(255,255,255,0.03)',
+                                    border: '1px solid rgba(255,255,255,0.08)',
+                                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
+                                    borderRadius: '10px', padding: '0.5rem 0.85rem',
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                    minWidth: '80px'
+                                  }}>
+                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>ลมยาง (PSI)</span>
+                                    <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)', letterSpacing: '-0.02em', marginTop: '1px' }}>
+                                      {evt.pressure}
+                                    </span>
+                                  </div>
+                                )}
+                                {/* Tread depth badge */}
+                                {evt.tread !== null && (
+                                  <div style={{
+                                    background: evt.tread < 2.0 ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)',
+                                    border: `1px solid ${evt.tread < 2.0 ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
+                                    borderRadius: '10px', padding: '0.5rem 0.85rem',
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                    minWidth: '80px'
+                                  }}>
+                                    <span style={{ fontSize: '0.72rem', color: evt.tread < 2.0 ? '#ef4444' : 'var(--text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>ดอกยาง (มม.)</span>
+                                    <span style={{ fontSize: '1.25rem', fontWeight: 800, color: evt.tread < 2.0 ? '#ef4444' : 'var(--text-primary)', fontFamily: 'var(--font-sans)', letterSpacing: '-0.02em', marginTop: '1px' }}>
+                                      {evt.tread}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          
-                          {/* Badges Row */}
-                          {(evt.pressure || evt.tread !== null) && (
-                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                              {/* Tire Pressure badge */}
-                              {evt.pressure && (
-                                <div style={{
-                                  background: 'rgba(255,255,255,0.02)',
-                                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(255,255,255,0.02)',
-                                  borderRadius: '12px', padding: '0.75rem 1.25rem',
-                                  display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                                  minWidth: '110px'
-                                }}>
-                                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500, letterSpacing: '0.02em', marginBottom: '2px' }}>ลมยาง (PSI)</span>
-                                  <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)', letterSpacing: '-0.02em' }}>
-                                    {evt.pressure}
-                                  </span>
-                                </div>
-                              )}
-                              {/* Tread depth badge */}
-                              {evt.tread !== null && (
-                                <div style={{
-                                  background: evt.tread < 2.0 ? 'rgba(239,68,68,0.05)' : 'rgba(255,255,255,0.02)',
-                                  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px ${evt.tread < 2.0 ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.02)'}`,
-                                  borderRadius: '12px', padding: '0.75rem 1.25rem',
-                                  display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                                  minWidth: '110px'
-                                }}>
-                                  <span style={{ fontSize: '0.8rem', color: evt.tread < 2.0 ? '#ef4444' : 'var(--text-secondary)', fontWeight: 500, letterSpacing: '0.02em', marginBottom: '2px' }}>ดอกยาง (มม.)</span>
-                                  <span style={{ fontSize: '1.5rem', fontWeight: 800, color: evt.tread < 2.0 ? '#ef4444' : 'var(--text-primary)', fontFamily: 'var(--font-sans)', letterSpacing: '-0.02em' }}>
-                                    {evt.tread}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          )}
 
                           {/* Info Divider */}
                           <div style={{ height: '1px', background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, transparent 100%)', margin: '0.25rem 0' }} />
