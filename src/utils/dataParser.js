@@ -1045,7 +1045,15 @@ export const getFilterOptions = (data) => {
     return true;
   }).sort();
 
-  const units = [...new Set(data.map(r => r["สังกัดรถ"]).filter(Boolean))].sort();
+  let units = [...new Set(data.map(r => r["สังกัดรถ"]).filter(Boolean))];
+  units = units.filter(u => {
+    const s = String(u).trim();
+    if (/11R/i.test(s)) return false; // Ignore tire sizes mistakenly pasted here
+    if (/^\d+$/.test(s)) return false; // Ignore pure numbers
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return false; // Ignore dates
+    return true;
+  }).sort();
+
   const reasons = [...new Set(data.map(r => r["สาเหตุที่ถอด"]).filter(Boolean))].sort();
   const statuses = [...new Set(data.map(r => r["สถานะยางออก"]).filter(Boolean))].sort();
   const formTypes = [...new Set(data.map(r => r["ประเภทแบบฟอร์ม"]).filter(Boolean))].sort();
