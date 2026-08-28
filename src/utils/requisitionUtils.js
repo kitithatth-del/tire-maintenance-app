@@ -232,14 +232,33 @@ export function buildEfficiencyChartData(rows) {
   }));
 }
 
-export function getFuelPeriods(fuelData) {
+export function getFuelPeriods(fuelData, rawData) {
+  // ถ้ามี fuelData → ดึงจาก fuelData
+  if (fuelData && fuelData.length > 0) {
+    const periods = new Set();
+    fuelData.forEach(f => {
+      if (f.month && f.year) {
+        const y = toADYear(f.year);
+        periods.add(`${f.month}|${y}`);
+      }
+    });
+    return Array.from(periods).map(p => {
+      const [month, year] = p.split('|');
+      const buddhistYear = Number(year) < 2500 ? Number(year) + 543 : Number(year);
+      return { month: Number(month), year: Number(year), label: `${month}/${buddhistYear}` };
+    }).sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+  }
+
+  // Fallback: ดึงจาก changeData/checkData เมื่อไม่มี fuelData (เช่น บน Render ใช้ GAS)
   const periods = new Set();
-  (fuelData || []).forEach(f => {
-    if (f.month && f.year) {
-      const y = toADYear(f.year);
-      periods.add(`${f.month}|${y}`);
-    }
-  });
+  (rawData || [])
+    .filter(r => r._sheet === 'เปลี่ยนยาง' && r['Month'] && r['Year'])
+    .forEach(r => {
+      const m = Number(r['Month']);
+      const y = toADYear(Number(r['Year']));
+      if (m && y) periods.add(`${m}|${y}`);
+    });
+
   return Array.from(periods).map(p => {
     const [month, year] = p.split('|');
     const buddhistYear = Number(year) < 2500 ? Number(year) + 543 : Number(year);

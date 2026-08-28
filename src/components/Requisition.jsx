@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Filter, RefreshCw, ClipboardList, CheckCircle, Package, AlertTriangle, TrendingUp } from 'lucide-react';
 import { buildRequisitionData, buildEfficiencyChartData, getFuelPeriods, getRequisitionCenters } from '../utils/requisitionUtils';
@@ -54,13 +54,20 @@ const CHART_COLORS = {
 };
 
 export default function Requisition({ rawData, fuelData }) {
-  const periods = useMemo(() => getFuelPeriods(fuelData), [fuelData]);
+  const periods = useMemo(() => getFuelPeriods(fuelData, rawData), [fuelData, rawData]);
   const centers = useMemo(() => getRequisitionCenters(rawData), [rawData]);
 
-  const latestPeriod = periods[periods.length - 1] || null;
-  const [selectedMonth, setSelectedMonth] = useState(latestPeriod?.month || '');
-  const [selectedYear, setSelectedYear] = useState(latestPeriod?.year || '');
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
   const [selectedCenter, setSelectedCenter] = useState('');
+
+  useEffect(() => {
+    if (periods.length > 0 && !selectedMonth && !selectedYear) {
+      const latestPeriod = periods[periods.length - 1];
+      setSelectedMonth(latestPeriod.month);
+      setSelectedYear(latestPeriod.year);
+    }
+  }, [periods, selectedMonth, selectedYear]);
 
   const rows = useMemo(() => {
     if (!selectedMonth || !selectedYear) return [];
