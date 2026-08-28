@@ -7,9 +7,10 @@ import TireHistoryModal from './components/TireHistoryModal';
 import TruckHistoryModal from './components/TruckHistoryModal';
 import CohortAnalysis from './components/CohortAnalysis';
 import RepeatedRepairDashboard from './components/RepeatedRepairDashboard';
+import Requisition from './components/Requisition';
 import { repeatedRepairMockData } from './utils/repeatedRepairMockData';
 import { rawMockData, processTireData, getDashboardStats, getFilterOptions, calculateWearRates } from './utils/dataParser';
-import { LayoutDashboard, CalendarClock, Database, Truck, Upload, FileCheck, Filter, RefreshCw, Sun, Moon, Menu, Activity, Search, Wrench } from 'lucide-react';
+import { LayoutDashboard, CalendarClock, Database, Truck, Upload, FileCheck, Filter, RefreshCw, Sun, Moon, Menu, Activity, Search, Wrench, ClipboardList } from 'lucide-react';
 import logoUrl from './assets/logo.png';
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
   const [importedRaw, setImportedRaw] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [importedTruckMetadata, setImportedTruckMetadata] = useState(null);
+  const [importedFuelData, setImportedFuelData] = useState([]);
   const [importedFileName, setImportedFileName] = useState('');
   const [selectedTire, setSelectedTire] = useState(null);
   const [selectedTruck, setSelectedTruck] = useState(null);
@@ -60,6 +62,7 @@ function App() {
             setImportedFileName(`ข้อมูลล่าสุดเมื่อ ${timeStr} น.`);
             setImportedRaw(allTiresData);
             setImportedTruckMetadata(data.truckData);
+            setImportedFuelData(data.fuelData || []);
           }
         } else {
           console.warn('Backend not ready or failed to load data, using mock data fallback');
@@ -246,6 +249,14 @@ function App() {
             <span>วิเคราะห์กลุ่ม</span>
           </button>
           <button
+            className={`nav-tab ${activeTab === 'requisition' ? 'active' : ''}`}
+            onClick={() => setActiveTab('requisition')}
+            title="ขออนุมัติเบิกยาง"
+          >
+            <ClipboardList size={18} />
+            <span>ขออนุมัติเบิกยาง</span>
+          </button>
+          <button
             className={`nav-tab ${activeTab === 'data' ? 'active' : ''}`}
             onClick={() => setActiveTab('data')}
             title="ฐานข้อมูล"
@@ -367,6 +378,7 @@ function App() {
           {activeTab === 'dashboard' && <Dashboard stats={dashboardStats} />}
           {activeTab === 'cohort' && <CohortAnalysis rawData={rawData} truckMetadata={importedTruckMetadata} />}
           {activeTab === 'planning' && <Planning data={planningData} rawData={rawData} truckMetadata={importedTruckMetadata} onTireClick={setSelectedTire} onTruckClick={setSelectedTruck} wearRates={wearRates} />}
+          {activeTab === 'requisition' && <Requisition rawData={rawData} fuelData={importedFuelData} />}
           {activeTab === 'data' && (
             <DataExplorer data={globalFilteredData} truckMetadata={importedTruckMetadata} filterOptions={filterOptions} onTireClick={setSelectedTire} onTruckClick={setSelectedTruck} />
           )}

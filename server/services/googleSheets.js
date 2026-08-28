@@ -30,132 +30,196 @@ const normalizeTruckId = (t) => {
 const extractMetadataFromRaw = (truckDataRaw, gpsDataRaw) => {
   const metadata = {};
   if (truckDataRaw && truckDataRaw.length > 0) {
-    const rawRows = truckDataRaw;
-    let headerIdx = -1;
-    for (let i = 0; i < Math.min(rawRows.length, 5); i++) {
-      if (rawRows[i] && rawRows[i].some(c => c && ['เบอร์รถ', 'สถานะรถ', 'ทะเบียนรถ'].includes(String(c).replace(/\s+/g, '')))) {
-        headerIdx = i; break;
-      }
-    }
-    if (headerIdx === -1 && rawRows.length > 1) headerIdx = 1;
-    if (headerIdx !== -1) {
-      const headers = rawRows[headerIdx];
-      const getIdx = (name) => headers.findIndex(c => c && String(c).replace(/\s+/g, '') === name);
-      const truckNoIdx = getIdx('เบอร์รถ'); // Find dynamically instead of hardcoding 96
-      const plateIdx = getIdx('ทะเบียนรถ') !== -1 ? getIdx('ทะเบียนรถ') : headers.findIndex(c => c && String(c).replace(/\s+/g, '').includes('ทะเบียน'));
-      const statusIdx = getIdx('สถานะรถ') !== -1 ? getIdx('สถานะรถ') : headers.findIndex(c => c && String(c).replace(/\s+/g, '').includes('สถานะ'));
-      const typeIdx = getIdx('ประเภทรถ') !== -1 ? getIdx('ประเภทรถ') : headers.findIndex(c => c && String(c).match(/ประเภท|ชนิด|ลักษณะ/));
-      for (let i = headerIdx + 1; i < rawRows.length; i++) {
-        const row = rawRows[i];
-        if (!row || truckNoIdx === -1 || !row[truckNoIdx]) continue;
-        const rawTruckNo = String(row[truckNoIdx]).trim();
-        const truckNo = normalizeTruckId(rawTruckNo) || rawTruckNo;
-        const plate = row[plateIdx] ? String(row[plateIdx]).trim() : null;
-        const status = row[statusIdx] ? String(row[statusIdx]).trim() : null;
-        const type = typeIdx !== -1 && row[typeIdx] ? String(row[typeIdx]).trim() : '';
+    if (!Array.isArray(truckDataRaw[0])) {
+      // Array of objects from GAS action=truck
+      truckDataRaw.forEach(row => {
+        if (!row) return;
+        const findVal = (keys) => {
+          for (let k of Object.keys(row)) {
+            const cleanK = String(k).replace(/\s+/g, '');
+            if (keys.some(key => cleanK.includes(key))) return row[k];
+          }
+          return null;
+        };
+        const rawTruckNo = findVal(['เบอร์รถ']);
+        if (!rawTruckNo) return;
+        const truckNo = normalizeTruckId(rawTruckNo) || String(rawTruckNo).trim();
+        const plate = findVal(['ทะเบียนรถ', 'ทะเบียน']);
+        const status = findVal(['สถานะรถ', 'สถานะ']);
+        const type = findVal(['ประเภทรถ', 'ชนิด']) || '';
         if (!metadata[truckNo]) metadata[truckNo] = {};
-        const isBackup = row.some(cell => cell && (String(cell).includes('สำรอง') || String(cell).includes('Tหาง') || String(cell).includes('หางสำรอง')));
-        const isPrimaryType = (type.includes('หัวลาก') || type.includes('กึ่งพ่วง')) && !isBackup;
-        if (isPrimaryType || !metadata[truckNo].truckType) {
-          if (!isBackup) {
-            const existingType = metadata[truckNo].truckType || '';
-            const isCombo = (existingType.includes('หัวลาก') && type.includes('กึ่งพ่วง')) || (existingType.includes('กึ่งพ่วง') && type.includes('หัวลาก'));
-            
-            if (isCombo) {
-              metadata[truckNo].truckType = 'เทรลเลอร์';
-              const existingPlate = metadata[truckNo].plate || '';
-              if (existingType.includes('หัวลาก')) {
-                 metadata[truckNo].plate = existingPlate + (plate ? ' / ' + plate : '');
+        if (type) metadata[truckNo].truckType = String(type).trim();
+        if (plate) metadata[truckNo].plate = String(plate).trim();
+        if (status) metadata[truckNo].truckStatus = String(status).trim();
+      });
+    } else {
+      const rawRows = truckDataRaw;
+      let headerIdx = -1;
+      for (let i = 0; i < Math.min(rawRows.length, 5); i++) {
+        if (rawRows[i] && Array.isArray(rawRows[i]) && rawRows[i].some(c => c && ['เบอร์รถ', 'สถานะรถ', 'ทะเบียนรถ'].includes(String(c).replace(/\s+/g, '')))) {
+          headerIdx = i; break;
+        }
+      }
+      if (headerIdx === -1 && rawRows.length > 1) headerIdx = 1;
+      if (headerIdx !== -1) {
+        const headers = rawRows[headerIdx];
+        const getIdx = (name) => headers.findIndex(c => c && String(c).replace(/\s+/g, '') === name);
+        const truckNoIdx = getIdx('เบอร์รถ'); // Find dynamically instead of hardcoding 96
+        const plateIdx = getIdx('ทะเบียนรถ') !== -1 ? getIdx('ทะเบียนรถ') : headers.findIndex(c => c && String(c).replace(/\s+/g, '').includes('ทะเบียน'));
+        const statusIdx = getIdx('สถานะรถ') !== -1 ? getIdx('สถานะรถ') : headers.findIndex(c => c && String(c).replace(/\s+/g, '').includes('สถานะ'));
+        const typeIdx = getIdx('ประเภทรถ') !== -1 ? getIdx('ประเภทรถ') : headers.findIndex(c => c && String(c).match(/ประเภท|ชนิด|ลักษณะ/));
+        for (let i = headerIdx + 1; i < rawRows.length; i++) {
+          const row = rawRows[i];
+          if (!row || truckNoIdx === -1 || !row[truckNoIdx]) continue;
+          const rawTruckNo = String(row[truckNoIdx]).trim();
+          const truckNo = normalizeTruckId(rawTruckNo) || rawTruckNo;
+          const plate = row[plateIdx] ? String(row[plateIdx]).trim() : null;
+          const status = row[statusIdx] ? String(row[statusIdx]).trim() : null;
+          const type = typeIdx !== -1 && row[typeIdx] ? String(row[typeIdx]).trim() : '';
+          if (!metadata[truckNo]) metadata[truckNo] = {};
+          const isBackup = row.some(cell => cell && (String(cell).includes('สำรอง') || String(cell).includes('Tหาง') || String(cell).includes('หางสำรอง')));
+          const isPrimaryType = (type.includes('หัวลาก') || type.includes('กึ่งพ่วง')) && !isBackup;
+          if (isPrimaryType || !metadata[truckNo].truckType) {
+            if (!isBackup) {
+              const existingType = metadata[truckNo].truckType || '';
+              const isCombo = (existingType.includes('หัวลาก') && type.includes('กึ่งพ่วง')) || (existingType.includes('กึ่งพ่วง') && type.includes('หัวลาก'));
+              
+              if (isCombo) {
+                metadata[truckNo].truckType = 'เทรลเลอร์';
+                const existingPlate = metadata[truckNo].plate || '';
+                if (existingType.includes('หัวลาก')) {
+                   metadata[truckNo].plate = existingPlate + (plate ? ' / ' + plate : '');
+                } else {
+                   metadata[truckNo].plate = (plate ? plate + ' / ' : '') + existingPlate;
+                }
               } else {
-                 metadata[truckNo].plate = (plate ? plate + ' / ' : '') + existingPlate;
+                metadata[truckNo].truckType = type;
+                metadata[truckNo].plate = plate;
               }
-            } else {
-              metadata[truckNo].truckType = type;
-              metadata[truckNo].plate = plate;
+              if (status) metadata[truckNo].truckStatus = status;
             }
-            if (status) metadata[truckNo].truckStatus = status;
           }
         }
       }
     }
   }
   if (gpsDataRaw && gpsDataRaw.length > 0) {
-    const rawRows = gpsDataRaw;
-    let headerIdx = -1;
-    for (let i = 0; i < Math.min(rawRows.length, 5); i++) {
-      if (rawRows[i] && rawRows[i].some(c => c && String(c).replace(/\s+/g, '') === 'ทะเบียนรถ')) {
-        headerIdx = i; break;
-      }
-    }
-    if (headerIdx !== -1) {
-      const headers = rawRows[headerIdx];
-      const getIdx = (name) => headers.findIndex(c => c && String(c).replace(/\s+/g, '') === name);
-      const tabienIdx = getIdx('ทะเบียนรถ');
-      const statusIdx = getIdx('สถานะรถ');
-      const locIdx = getIdx('สถานที่ปัจจุบัน');
-      const timeIdx = headers.findIndex(c => c && String(c).replace(/\s+/g, '').match(/วัน\/เวลา|วันที่\/เวลา|วันเวลา|เวลาปัจจุบัน|เวลา/));
-
-      // หาคอลัมน์เบอร์รถ (ถ้ามีชื่อคอลัมน์ระบุไว้) ถ้าไม่มีให้ใช้ column A
-      const truckNoColIdx = headers.findIndex(c => c && String(c).replace(/\s+/g, '').includes('เบอร์รถ'));
-
-      for (let i = headerIdx + 1; i < rawRows.length; i++) {
-        const row = rawRows[i];
-        if (!row) continue;
-
+    if (!Array.isArray(gpsDataRaw[0])) {
+      // Array of objects from GAS action=gps
+      gpsDataRaw.forEach(row => {
+        if (!row) return;
+        const findVal = (keys) => {
+          for (let k of Object.keys(row)) {
+            const cleanK = String(k).replace(/\s+/g, '');
+            if (keys.some(key => cleanK.includes(key))) return row[k];
+          }
+          return null;
+        };
+        const rawTruckNoVal = findVal(['เบอร์รถ', 'ทะเบียนรถ']);
         let targetTruckNo = null;
-
-        // === วิธีที่ 1: เบอร์รถจากคอลัมน์ A หรือคอลัมน์ "เบอร์รถ" (แม่นยำที่สุด) ===
-        const colAIdx = truckNoColIdx !== -1 ? truckNoColIdx : 0;
-        const rawTruckNoVal = row[colAIdx] ? String(row[colAIdx]).trim() : null;
         if (rawTruckNoVal) {
           const norm = normalizeTruckId(rawTruckNoVal);
-          if (norm && metadata[norm]) {
-            targetTruckNo = norm;
+          if (norm && metadata[norm]) targetTruckNo = norm;
+        }
+        if (!targetTruckNo) {
+          const plate = findVal(['ทะเบียนรถ']);
+          if (plate) {
+            const numPlate = String(plate).replace(/[^0-9]/g, '');
+            if (numPlate.length >= 4) {
+              targetTruckNo = Object.keys(metadata).find(k => {
+                const mPlate = metadata[k].plate;
+                return mPlate && mPlate.replace(/[^0-9]/g, '') === numPlate;
+              });
+            }
           }
         }
-
-        // === วิธีที่ 2: แกะจากคอลัมน์ "ทะเบียนรถ" (รองรับรูปแบบต่างๆ) ===
-        if (!targetTruckNo && tabienIdx !== -1 && row[tabienIdx]) {
-          const tabienStr = String(row[tabienIdx]).trim();
-
-          // รูปแบบ "No.193(79-7280)" หรือ "PTL.932(69-7679)Suspend" → แกะเบอร์รถ
-          const truckInBracket = tabienStr.match(/^(?:No\.?\s*)?([A-Za-z0-9\.]+)\(/i);
-          if (truckInBracket) {
-            const norm = normalizeTruckId(truckInBracket[1].trim());
-            if (norm && metadata[norm]) targetTruckNo = norm;
-          }
-
-          // รูปแบบทะเบียนในวงเล็บหรือทะเบียนล้วน → จับคู่กับ plate ในฐานข้อมูล
-          if (!targetTruckNo) {
-            const plateInBracket = tabienStr.match(/\(([^)]+)\)/);
-            const plate = plateInBracket ? plateInBracket[1].trim() : tabienStr;
-            const cleanPlate = plate.replace(/[^0-9ก-ฮa-zA-Z]/g, '');
-            const numPlate = plate.replace(/[^0-9]/g, '');
-
-            targetTruckNo = Object.keys(metadata).find(k => {
-              const mPlate = metadata[k].plate;
-              if (!mPlate) return false;
-              const cleanMPlate = mPlate.replace(/[^0-9ก-ฮa-zA-Z]/g, '');
-              if (cleanMPlate === cleanPlate) return true;
-              // fallback: เลขทะเบียนตรงกัน (ต้องมีอย่างน้อย 4 หลัก)
-              const numMPlate = mPlate.replace(/[^0-9]/g, '');
-              if (numPlate.length >= 4 && numPlate === numMPlate) return true;
-              return false;
-            });
-          }
+        if (targetTruckNo) {
+          const status = findVal(['สถานะรถ', 'สถานะ']);
+          const loc = findVal(['สถานที่ปัจจุบัน', 'สถานที่']);
+          const timeVal = findVal(['วัน/เวลา', 'เวลาปัจจุบัน', 'เวลา']);
+          if (status) metadata[targetTruckNo].gpsStatus = String(status).trim();
+          if (loc) metadata[targetTruckNo].gpsLocation = String(loc).trim();
+          if (timeVal) metadata[targetTruckNo].gpsTime = String(timeVal).trim();
         }
+      });
+    } else {
+      const rawRows = gpsDataRaw;
+      let headerIdx = -1;
+      for (let i = 0; i < Math.min(rawRows.length, 5); i++) {
+        if (rawRows[i] && Array.isArray(rawRows[i]) && rawRows[i].some(c => c && String(c).replace(/\s+/g, '') === 'ทะเบียนรถ')) {
+          headerIdx = i; break;
+        }
+      }
+      if (headerIdx !== -1) {
+        const headers = rawRows[headerIdx];
+        const getIdx = (name) => headers.findIndex(c => c && String(c).replace(/\s+/g, '') === name);
+        const tabienIdx = getIdx('ทะเบียนรถ');
+        const statusIdx = getIdx('สถานะรถ');
+        const locIdx = getIdx('สถานที่ปัจจุบัน');
+        const timeIdx = headers.findIndex(c => c && String(c).replace(/\s+/g, '').match(/วัน\/เวลา|วันที่\/เวลา|วันเวลา|เวลาปัจจุบัน|เวลา/));
 
-        if (!targetTruckNo) continue;
+        // หาคอลัมน์เบอร์รถ (ถ้ามีชื่อคอลัมน์ระบุไว้) ถ้าไม่มีให้ใช้ column A
+        const truckNoColIdx = headers.findIndex(c => c && String(c).replace(/\s+/g, '').includes('เบอร์รถ'));
 
-        const status = (statusIdx !== -1 && row[statusIdx]) ? String(row[statusIdx]).trim() : null;
-        const loc = (locIdx !== -1 && row[locIdx]) ? String(row[locIdx]).trim() : null;
-        const timeVal = (timeIdx !== -1 && row[timeIdx]) ? row[timeIdx] : null;
-        const timeStr = timeVal ? String(timeVal).trim() : null;
+        for (let i = headerIdx + 1; i < rawRows.length; i++) {
+          const row = rawRows[i];
+          if (!row) continue;
 
-        if (!metadata[targetTruckNo]) metadata[targetTruckNo] = {};
-        if (status) metadata[targetTruckNo].gpsStatus = status;
-        if (loc) metadata[targetTruckNo].gpsLocation = loc;
-        if (timeStr) metadata[targetTruckNo].gpsTime = timeStr;
+          let targetTruckNo = null;
+
+          // === วิธีที่ 1: เบอร์รถจากคอลัมน์ A หรือคอลัมน์ "เบอร์รถ" (แม่นยำที่สุด) ===
+          const colAIdx = truckNoColIdx !== -1 ? truckNoColIdx : 0;
+          const rawTruckNoVal = row[colAIdx] ? String(row[colAIdx]).trim() : null;
+          if (rawTruckNoVal) {
+            const norm = normalizeTruckId(rawTruckNoVal);
+            if (norm && metadata[norm]) {
+              targetTruckNo = norm;
+            }
+          }
+
+          // === วิธีที่ 2: แกะจากคอลัมน์ "ทะเบียนรถ" (รองรับรูปแบบต่างๆ) ===
+          if (!targetTruckNo && tabienIdx !== -1 && row[tabienIdx]) {
+            const tabienStr = String(row[tabienIdx]).trim();
+
+            // รูปแบบ "No.193(79-7280)" หรือ "PTL.932(69-7679)Suspend" → แกะเบอร์รถ
+            const truckInBracket = tabienStr.match(/^(?:No\.?\s*)?([A-Za-z0-9\.]+)\(/i);
+            if (truckInBracket) {
+              const norm = normalizeTruckId(truckInBracket[1].trim());
+              if (norm && metadata[norm]) targetTruckNo = norm;
+            }
+
+            // รูปแบบทะเบียนในวงเล็บหรือทะเบียนล้วน → จับคู่กับ plate ในฐานข้อมูล
+            if (!targetTruckNo) {
+              const plateInBracket = tabienStr.match(/\(([^)]+)\)/);
+              const plate = plateInBracket ? plateInBracket[1].trim() : tabienStr;
+              const cleanPlate = plate.replace(/[^0-9ก-ฮa-zA-Z]/g, '');
+              const numPlate = plate.replace(/[^0-9]/g, '');
+
+              targetTruckNo = Object.keys(metadata).find(k => {
+                const mPlate = metadata[k].plate;
+                if (!mPlate) return false;
+                const cleanMPlate = mPlate.replace(/[^0-9ก-ฮa-zA-Z]/g, '');
+                if (cleanMPlate === cleanPlate) return true;
+                // fallback: เลขทะเบียนตรงกัน (ต้องมีอย่างน้อย 4 หลัก)
+                const numMPlate = mPlate.replace(/[^0-9]/g, '');
+                if (numPlate.length >= 4 && numPlate === numMPlate) return true;
+                return false;
+              });
+            }
+          }
+
+          if (!targetTruckNo) continue;
+
+          const status = (statusIdx !== -1 && row[statusIdx]) ? String(row[statusIdx]).trim() : null;
+          const loc = (locIdx !== -1 && row[locIdx]) ? String(row[locIdx]).trim() : null;
+          const timeVal = (timeIdx !== -1 && row[timeIdx]) ? row[timeIdx] : null;
+          const timeStr = timeVal ? String(timeVal).trim() : null;
+
+          if (!metadata[targetTruckNo]) metadata[targetTruckNo] = {};
+          if (status) metadata[targetTruckNo].gpsStatus = status;
+          if (loc) metadata[targetTruckNo].gpsLocation = loc;
+          if (timeStr) metadata[targetTruckNo].gpsTime = timeStr;
+        }
       }
     }
   }
@@ -378,52 +442,87 @@ async function fetchAllDataStreaming(gzipStream) {
 
   // 1. ดึง Master data ก่อนเพื่อน ตอนที่ RAM ยังว่างๆ
   console.log('  - กำลังดึงข้อมูล Master (รถ/GPS)...');
-  let masterRes;
+  let truckMetadata = {};
   try {
-    masterRes = await axios.get(`${gasUrl.trim()}?type=master`, { timeout: 300000 });
-  } catch (err) {
-    let errorDetails = err.message;
-    if (err.response) {
-      errorDetails = `Status: ${err.response.status}, Body: ${typeof err.response.data === 'object' ? JSON.stringify(err.response.data) : err.response.data}`;
+    let masterRes = await axios.get(`${gasUrl.trim()}?type=master`, { timeout: 15000 });
+    if (masterRes.data && masterRes.data.status === 'ready') {
+      truckMetadata = extractMetadataFromRaw(masterRes.data.truckDataRaw, masterRes.data.gpsDataRaw);
+    } else {
+      throw new Error('Fallback to action=truck');
     }
-    throw new Error(`Failed to fetch Master data. Error: ${errorDetails}`);
-  }
-
-  if (!masterRes.data || masterRes.data.status !== 'ready') {
-    throw new Error(`Failed to fetch Master: ${masterRes.data ? masterRes.data.message : 'No valid response'}`);
+  } catch (err) {
+    console.log('  - type=master ไม่รองรับ กำลังดึงผ่าน action=truck & action=gps...');
+    try {
+      const tRes = await axios.get(`${gasUrl.trim()}?action=truck`, { timeout: 15000 });
+      const gRes = await axios.get(`${gasUrl.trim()}?action=gps`, { timeout: 15000 });
+      truckMetadata = extractMetadataFromRaw(tRes.data, gRes.data);
+    } catch (err2) {
+      console.warn('⚠️ ไม่สามารถดึง Master metadata ได้:', err2.message);
+    }
   }
   
-  const truckMetadata = extractMetadataFromRaw(masterRes.data.truckDataRaw, masterRes.data.gpsDataRaw);
-  masterRes.data = null; // คืน RAM ทันที
   stats.truckCount = Object.keys(truckMetadata).length;
 
-  // ฟังก์ชันดึงข้อมูลทีละหน้าแล้ว write ลง stream เลย
-  const fetchPagedStream = async (type, isFirst) => {
+  // ฟังก์ชันดึงข้อมูลทีละหน้าหรือดึงแบบ action แล้ว write ลง stream เลย
+  const fetchPagedStream = async (type, jsonKey, isFirstType) => {
     let start = 1;
     const limit = 10000;
     let hasMore = true;
     let count = 0;
     let firstPageOfType = true;
     let colKeys = []; // เก็บ headers ไว้ใช้ข้ามหน้า
+    let wroteHeader = false;
 
     while (hasMore) {
       console.log(`  - กำลังดึงข้อมูล ${type} (เริ่มบรรทัดที่ ${start})...`);
       const url = `${gasUrl.trim()}?type=${type}&start=${start}&limit=${limit}`;
       
       let res;
+      let isDirectObjects = false;
       try {
-        res = await axios.get(url, { timeout: 300000 });
+        res = await axios.get(url, { timeout: 15000 });
+        if (!res.data || res.data.status !== 'ready') throw new Error('Fallback to action');
       } catch (err) {
-        if (start > 1) {
-           console.warn(`⚠️ Warning: Failed to fetch ${type} at start=${start} (${err.message}). Assuming end of data.`);
-           hasMore = false;
-           break;
+        if (start === 1) {
+          console.log(`  - type=${type} ไม่รองรับ กำลังดึงผ่าน action=${type}...`);
+          try {
+            res = await axios.get(`${gasUrl.trim()}?action=${type}`, { timeout: 15000 });
+            if (Array.isArray(res.data)) {
+              isDirectObjects = true;
+            }
+          } catch (actionErr) {
+            throw new Error(`Failed to fetch ${type}: ${actionErr.message}`);
+          }
         } else {
-           throw err; // ถ้าหน้าแรกพังแปลว่าของจริง ให้โยน error ออกไป
+          console.warn(`⚠️ Warning: Failed to fetch ${type} at start=${start}. Assuming end of data.`);
+          hasMore = false;
+          break;
         }
       }
 
-      if (res && res.data && res.data.status === 'ready') {
+      if (isDirectObjects && Array.isArray(res.data)) {
+        if (!wroteHeader) {
+          gzipStream.write(isFirstType ? `{"${jsonKey}":[` : `,"${jsonKey}":[`);
+          wroteHeader = true;
+        }
+        const arr = res.data;
+        count += arr.length;
+        if (arr.length > 0) {
+          let chunkStr = JSON.stringify(arr);
+          chunkStr = chunkStr.substring(1, chunkStr.length - 1);
+          if (!firstPageOfType) {
+            gzipStream.write(',');
+          }
+          gzipStream.write(chunkStr);
+          firstPageOfType = false;
+        }
+        hasMore = false;
+        res.data = null;
+      } else if (res && res.data && res.data.status === 'ready') {
+        if (!wroteHeader) {
+          gzipStream.write(isFirstType ? `{"${jsonKey}":[` : `,"${jsonKey}":[`);
+          wroteHeader = true;
+        }
         const arr = res.data.data || [];
         let startIdx = 0;
 
@@ -517,28 +616,115 @@ async function fetchAllDataStreaming(gzipStream) {
         throw new Error(res.data ? res.data.message : `Unknown GAS error for type ${type}`);
       }
     }
+    if (!wroteHeader) {
+      gzipStream.write(isFirstType ? `{"${jsonKey}":[` : `,"${jsonKey}":[`);
+    }
+    gzipStream.write(']');
     return count;
   };
 
-  // 2. เขียน JSON structure ทีละส่วน พร้อมดึงข้อมูลทีละหน้า
-  gzipStream.write('{"changeData":[');
-  stats.changeCount = await fetchPagedStream('change');
+  try {
+    // 2. เขียน JSON structure ทีละส่วน พร้อมดึงข้อมูลทีละหน้า
+    stats.changeCount = await fetchPagedStream('change', 'changeData', true);
+    stats.checkCount = await fetchPagedStream('check', 'checkData', false);
+    stats.receiveCount = await fetchPagedStream('receive', 'receiveData', false);
 
-  gzipStream.write('],"checkData":[');
-  stats.checkCount = await fetchPagedStream('check');
+    stats.lastUpdated = new Date().toISOString();
 
-  gzipStream.write('],"receiveData":[');
-  stats.receiveCount = await fetchPagedStream('receive');
+    gzipStream.write('],"gpsData":[]');
+    gzipStream.write(`,"truckData":${JSON.stringify(truckMetadata)}`);
+    gzipStream.write(`,"lastUpdated":"${stats.lastUpdated}"}`);
+    gzipStream.end();
 
-  stats.lastUpdated = new Date().toISOString();
+    console.log(`🎉 Streaming สำเร็จ! เปลี่ยนยาง: ${stats.changeCount} | ตรวจเช็ค: ${stats.checkCount} | รับยาง: ${stats.receiveCount} | รถ: ${stats.truckCount}`);
+    return stats;
+  } catch (err) {
+    console.warn('⚠️ การดึงข้อมูลผ่าน GAS ล้มเหลว สลับไปใช้วิธีอ่านจากไฟล์ XLSX ในเครื่อง:', err.message);
+    return await streamFromLocalXlsx(gzipStream);
+  }
+}
 
-  gzipStream.write('],"gpsData":[]');
+async function streamFromLocalXlsx(gzipStream) {
+  const localFile = path.join(__dirname, '..', '..', 'ข้อมูลยางเข้า ออก - Copy.xlsx');
+  if (!fs.existsSync(localFile)) {
+    throw new Error('Local XLSX file not found: ' + localFile);
+  }
+  console.log('📂 เริ่มอ่านข้อมูลจากไฟล์ XLSX ในเครื่อง:', localFile);
+  const wb = xlsx.readFile(localFile);
+  
+  const getSheetData = (sheetName) => {
+    if (!wb.Sheets[sheetName]) return [];
+    const raw = xlsx.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1 });
+    return getTireDataFromRaw(raw);
+  };
+
+  const changeData = getSheetData('ข้อมูลเปลี่ยนยาง');
+  const checkData = getSheetData('ตรวจเช็คลมยางดอกยาง');
+  const receiveData = getSheetData('รับยางเข้า');
+
+  const truckRaw = wb.Sheets['Data รถ'] ? xlsx.utils.sheet_to_json(wb.Sheets['Data รถ'], { header: 1 }) : [];
+  const gpsRaw = wb.Sheets['GPS สถานที่ปัจจุบัน'] ? xlsx.utils.sheet_to_json(wb.Sheets['GPS สถานที่ปัจจุบัน'], { header: 1 }) : [];
+  const truckMetadata = extractMetadataFromRaw(truckRaw, gpsRaw);
+
+  const fuelRaw = wb.Sheets['อัตราค่าเฉลี่ยน้ำมันเชื้อเพลิง'] ? xlsx.utils.sheet_to_json(wb.Sheets['อัตราค่าเฉลี่ยน้ำมันเชื้อเพลิง'], { header: 1 }) : [];
+  const fuelData = getFuelDataFromRaw(fuelRaw);
+
+  gzipStream.write('{"changeData":');
+  gzipStream.write(JSON.stringify(changeData));
+  gzipStream.write(',"checkData":');
+  gzipStream.write(JSON.stringify(checkData));
+  gzipStream.write(',"receiveData":');
+  gzipStream.write(JSON.stringify(receiveData));
+  gzipStream.write(',"gpsData":[]');
   gzipStream.write(`,"truckData":${JSON.stringify(truckMetadata)}`);
-  gzipStream.write(`,"lastUpdated":"${stats.lastUpdated}"}`);
+  gzipStream.write(`,"fuelData":${JSON.stringify(fuelData)}`);
+  gzipStream.write(`,"lastUpdated":"${new Date().toISOString()}"}`);
   gzipStream.end();
 
-  console.log(`🎉 Streaming สำเร็จ! เปลี่ยนยาง: ${stats.changeCount} | ตรวจเช็ค: ${stats.checkCount} | รับยาง: ${stats.receiveCount} | รถ: ${stats.truckCount}`);
-  return stats;
+  console.log(`🎉 ดึงข้อมูลจาก XLSX สำเร็จ! เปลี่ยนยาง: ${changeData.length} | ตรวจเช็ค: ${checkData.length} | รับยาง: ${receiveData.length}`);
+  return {
+    changeCount: changeData.length,
+    checkCount: checkData.length,
+    receiveCount: receiveData.length,
+    truckCount: Object.keys(truckMetadata).length,
+    lastUpdated: new Date().toISOString()
+  };
+}
+
+// แปลงข้อมูลอัตราค่าเฉลี่ยน้ำมันเชื้อเพลิงเป็นรูป Objects
+function getFuelDataFromRaw(raw) {
+  if (!raw || raw.length < 2) return [];
+  const headers = raw[0];
+  if (!headers) return [];
+
+  // หา index ของคอลัมน์ที่ต้องการ
+  const truckIdx = headers.findIndex(c => c && String(c).replace(/[\s\r\n]+/g, '').includes('เบอร์รถ') && !String(c).replace(/[\s\r\n]+/g, '').includes('ซ่อน'));
+  const mileCarryIdx = headers.findIndex(c => c && String(c).replace(/[\s\r\n]+/g, '').includes('เลขไมล์ยกมา'));
+  const mileEndIdx = headers.findIndex(c => c && String(c).replace(/[\s\r\n]+/g, '').includes('เลขไมล์สุดท้าย'));
+  const truckTypeIdx = headers.findIndex(c => c && String(c).replace(/[\s\r\n]+/g, '') === 'ประเภทรถ');
+  const centerIdx = headers.findIndex(c => c && String(c).replace(/[\s\r\n]+/g, '').includes('ประเภทงาน'));
+
+  // Month และ Year อยู่ท้าย 2 คอลัมน์
+  const monthIdx = headers.length - 2;
+  const yearIdx = headers.length - 1;
+
+  const result = [];
+  for (let i = 1; i < raw.length; i++) {
+    const row = raw[i];
+    if (!row || !row[truckIdx]) continue;
+    const truckNo = String(row[truckIdx]).trim();
+    if (!truckNo || truckNo === 'null') continue;
+    result.push({
+      truckNo,
+      mileCarryForward: Number(row[mileCarryIdx]) || 0,
+      mileEnd: Number(row[mileEndIdx]) || 0,
+      truckType: row[truckTypeIdx] ? String(row[truckTypeIdx]).trim() : '',
+      center: row[centerIdx] ? String(row[centerIdx]).trim() : '',
+      month: row[monthIdx] ? Number(row[monthIdx]) : null,
+      year: row[yearIdx] ? Number(row[yearIdx]) : null,
+    });
+  }
+  return result;
 }
 
 module.exports = { fetchAllData, fetchAllDataStreaming };
