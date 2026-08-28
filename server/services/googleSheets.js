@@ -631,8 +631,34 @@ async function fetchAllDataStreaming(gzipStream) {
 
     stats.lastUpdated = new Date().toISOString();
 
+    // ดึงข้อมูล fuelData
+    let fuelData = [];
+    try {
+      console.log('  - กำลังดึงข้อมูลอัตราค่าเฉลี่ยน้ำมันเชื้อเพลิง (fuel)...');
+      let fuelRes;
+      try {
+        fuelRes = await axios.get(`${gasUrl.trim()}?type=fuel&start=1&limit=10000`, { timeout: 20000 });
+      } catch (err) {
+        console.log('  - type=fuel ไม่รองรับผ่าน type, ลองผ่าน action=fuel...');
+        fuelRes = await axios.get(`${gasUrl.trim()}?action=fuel`, { timeout: 20000 });
+      }
+
+      let rawFuel = [];
+      if (fuelRes && fuelRes.data) {
+        if (fuelRes.data.status === 'ready' && fuelRes.data.data) {
+          rawFuel = fuelRes.data.data;
+        } else if (Array.isArray(fuelRes.data)) {
+          rawFuel = fuelRes.data;
+        }
+      }
+      fuelData = getFuelDataFromRaw(rawFuel);
+    } catch (fuelErr) {
+      console.warn('⚠️ ไม่สามารถดึงข้อมูลอัตราน้ำมัน (fuel) ได้:', fuelErr.message);
+    }
+
     gzipStream.write(',"gpsData":[]');
     gzipStream.write(`,"truckData":${JSON.stringify(truckMetadata)}`);
+    gzipStream.write(`,"fuelData":${JSON.stringify(fuelData)}`);
     gzipStream.write(`,"lastUpdated":"${stats.lastUpdated}"}`);
 
     gzipStream.end();
