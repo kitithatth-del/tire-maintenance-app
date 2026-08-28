@@ -631,9 +631,10 @@ async function fetchAllDataStreaming(gzipStream) {
 
     stats.lastUpdated = new Date().toISOString();
 
-    gzipStream.write('],"gpsData":[]');
+    gzipStream.write(',"gpsData":[]');
     gzipStream.write(`,"truckData":${JSON.stringify(truckMetadata)}`);
     gzipStream.write(`,"lastUpdated":"${stats.lastUpdated}"}`);
+
     gzipStream.end();
 
     console.log(`🎉 Streaming สำเร็จ! เปลี่ยนยาง: ${stats.changeCount} | ตรวจเช็ค: ${stats.checkCount} | รับยาง: ${stats.receiveCount} | รถ: ${stats.truckCount}`);
