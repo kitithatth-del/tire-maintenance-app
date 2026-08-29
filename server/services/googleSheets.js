@@ -444,7 +444,7 @@ async function fetchAllDataStreaming(gzipStream) {
   console.log('  - กำลังดึงข้อมูล Master (รถ/GPS)...');
   let truckMetadata = {};
   try {
-    let masterRes = await axios.get(`${gasUrl.trim()}?type=master`, { timeout: 15000 });
+    let masterRes = await axios.get(`${gasUrl.trim()}?type=master`, { timeout: 60000 });
     if (masterRes.data && masterRes.data.status === 'ready') {
       truckMetadata = extractMetadataFromRaw(masterRes.data.truckDataRaw, masterRes.data.gpsDataRaw);
     } else {
@@ -453,8 +453,8 @@ async function fetchAllDataStreaming(gzipStream) {
   } catch (err) {
     console.log('  - type=master ไม่รองรับ กำลังดึงผ่าน action=truck & action=gps...');
     try {
-      const tRes = await axios.get(`${gasUrl.trim()}?action=truck`, { timeout: 15000 });
-      const gRes = await axios.get(`${gasUrl.trim()}?action=gps`, { timeout: 15000 });
+      const tRes = await axios.get(`${gasUrl.trim()}?action=truck`, { timeout: 60000 });
+      const gRes = await axios.get(`${gasUrl.trim()}?action=gps`, { timeout: 60000 });
       truckMetadata = extractMetadataFromRaw(tRes.data, gRes.data);
     } catch (err2) {
       console.warn('⚠️ ไม่สามารถดึง Master metadata ได้:', err2.message);
@@ -479,14 +479,36 @@ async function fetchAllDataStreaming(gzipStream) {
       
       let res;
       let isDirectObjects = false;
-      try {
-        res = await axios.get(url, { timeout: 15000 });
-        if (!res.data || res.data.status !== 'ready') throw new Error('Fallback to action');
-      } catch (err) {
+      let attempts = 0;
+      let success = false;
+      let lastErr = null;
+
+      while (attempts < 3 && !success) {
+        attempts++;
+        try {
+          res = await axios.get(url, { timeout: 60000 });
+          if (!res.data || res.data.status !== 'ready') {
+            console.warn(`⚠️ GAS request failed. Message from GAS: ${res.data ? res.data.message : 'No message'}`);
+            throw new Error('Fallback to action');
+          }
+          success = true;
+        } catch (err) {
+          lastErr = err;
+          if (start === 1 && err.message === 'Fallback to action') {
+            break; // Don't retry if we need to fallback
+          }
+          if (attempts < 3) {
+            console.warn(`⚠️ Timeout/Error fetching ${type} at start=${start}, retrying (${attempts}/3)...`);
+            await new Promise(r => setTimeout(r, 2000));
+          }
+        }
+      }
+
+      if (!success) {
         if (start === 1) {
           console.log(`  - type=${type} ไม่รองรับ กำลังดึงผ่าน action=${type}...`);
           try {
-            res = await axios.get(`${gasUrl.trim()}?action=${type}`, { timeout: 15000 });
+            res = await axios.get(`${gasUrl.trim()}?action=${type}`, { timeout: 60000 });
             if (Array.isArray(res.data)) {
               isDirectObjects = true;
             }
@@ -494,7 +516,7 @@ async function fetchAllDataStreaming(gzipStream) {
             throw new Error(`Failed to fetch ${type}: ${actionErr.message}`);
           }
         } else {
-          console.warn(`⚠️ Warning: Failed to fetch ${type} at start=${start}. Assuming end of data.`);
+          console.warn(`⚠️ Warning: Failed to fetch ${type} at start=${start} after 3 attempts. Assuming end of data. Error: ${lastErr?.message}`);
           hasMore = false;
           break;
         }
@@ -635,13 +657,27 @@ async function fetchAllDataStreaming(gzipStream) {
     let fuelData = [];
     try {
       console.log('  - กำลังดึงข้อมูลอัตราค่าเฉลี่ยน้ำมันเชื้อเพลิง (fuel)...');
-      let fuelRes;
-      try {
-        fuelRes = await axios.get(`${gasUrl.trim()}?type=fuel&start=1&limit=10000`, { timeout: 20000 });
-      } catch (err) {
-        console.log('  - type=fuel ไม่รองรับผ่าน type, ลองผ่าน action=fuel...');
-        fuelRes = await axios.get(`${gasUrl.trim()}?action=fuel`, { timeout: 20000 });
-      }
+        let fuelRes;
+        let attempts = 0;
+        let success = false;
+        
+        while (attempts < 3 && !success) {
+          attempts++;
+          try {
+            fuelRes = await axios.get(`${gasUrl.trim()}?type=fuel&start=1&limit=10000`, { timeout: 60000 });
+            success = true;
+          } catch (err) {
+            if (attempts < 3) {
+              console.warn(`⚠️ Timeout/Error fetching fuel, retrying (${attempts}/3)...`);
+              await new Promise(r => setTimeout(r, 2000));
+            }
+          }
+        }
+        
+        if (!success) {
+          console.log('  - type=fuel ไม่รองรับผ่าน type, ลองผ่าน action=fuel...');
+          fuelRes = await axios.get(`${gasUrl.trim()}?action=fuel`, { timeout: 60000 });
+        }
 
       let rawFuel = [];
       if (fuelRes && fuelRes.data) {
