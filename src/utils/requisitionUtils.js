@@ -72,27 +72,46 @@ export function buildRequisitionData(rawData, fuelData, selectedMonth, selectedY
   // หายางที่กำลังติดตั้ง ณ เดือนที่เลือก
   const positionMap = {};
 
-  changeRows.forEach(row => {
+  // เรียงลำดับข้อมูลเปลี่ยนยางตามวันที่ติดตั้ง เพื่อให้สามารถคำนวณการถอด-ใส่ยางได้ถูกต้องตามลำดับเวลา
+  const sortedChangeRows = [...changeRows].sort((a, b) => {
+    const dA = parseExcelDate(a['วันที่ติดตั้ง'] || a['วันที่บันทึก']) || new Date(0);
+    const dB = parseExcelDate(b['วันที่ติดตั้ง'] || b['วันที่บันทึก']) || new Date(0);
+    return dA - dB;
+  });
+
+  sortedChangeRows.forEach(row => {
     const truck = String(row['เบอร์รถ'] || '').trim();
     const position = String(row['ตำแหน่งล้อยาง'] || '').trim();
     const tireIn = String(row['หมายเลขยาง_เข้า'] || '').trim();
     if (!truck || !position || !tireIn || tireIn === 'null') return;
 
     const installDateRaw = row['วันที่ติดตั้ง'] || row['วันที่บันทึก'];
-    const installDate = parseExcelDate(installDateRaw);
-    if (!installDate || installDate > targetDate) return;
+    const rowDate = parseExcelDate(installDateRaw);
+    if (!rowDate || rowDate > targetDate) return;
 
     const key = `${truck}|${position}`;
     const existing = positionMap[key];
 
-    if (!existing || installDate > existing.installDate) {
+    // ถ้ามีการเอายางออก (และเป็นยางเส้นเดียวกับที่อยู่บนรถตอนนี้) ให้ถอดยางนั้นออกก่อน
+    const tireOut = String(row['หมายเลขยาง_ออก'] || '').trim();
+    if (tireOut && tireOut !== 'null' && existing && existing.tireNumber === tireOut) {
+       // ถ้ายางออกเกิดขึ้นหลังจากวันที่ติดตั้งยางที่มีอยู่ ให้ถอดออก
+       if (rowDate >= existing.installDate) {
+         delete positionMap[key];
+       }
+    }
+
+    if (!tireIn || tireIn === 'null') return; // ถ้าไม่มียางเข้า ให้ข้ามไป (เป็นการถอดอย่างเดียว)
+
+    // เอายางเข้าใส่แทน
+    if (!positionMap[key] || rowDate > positionMap[key].installDate) {
       positionMap[key] = {
         truck,
         position,
         tireNumber: tireIn,
         tireType: getTireType(tireIn),
         tireSize: row['ชนิด/ขนาดยาง_เข้า'] || '',
-        installDate,
+        installDate: rowDate,
         installMileRaw: Number(row['เลขไมล์ติดตั้ง']) || 0,
         center: row['ศูนย์บริการ'] || '',
         unit: row['สังกัดรถ'] || '',
@@ -244,8 +263,7 @@ export function getFuelPeriods(fuelData, rawData) {
     });
     return Array.from(periods).map(p => {
       const [month, year] = p.split('|');
-      const buddhistYear = Number(year) < 2500 ? Number(year) + 543 : Number(year);
-      return { month: Number(month), year: Number(year), label: `${month}/${buddhistYear}` };
+      return { month: Number(month), year: Number(year), label: `${month}/${Number(year)}` };
     }).sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
   }
 
@@ -261,8 +279,7 @@ export function getFuelPeriods(fuelData, rawData) {
 
   return Array.from(periods).map(p => {
     const [month, year] = p.split('|');
-    const buddhistYear = Number(year) < 2500 ? Number(year) + 543 : Number(year);
-    return { month: Number(month), year: Number(year), label: `${month}/${buddhistYear}` };
+    return { month: Number(month), year: Number(year), label: `${month}/${Number(year)}` };
   }).sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
 }
 
