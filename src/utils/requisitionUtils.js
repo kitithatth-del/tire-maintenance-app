@@ -140,7 +140,7 @@ export function buildRequisitionData(rawData, fuelData, selectedMonth, selectedY
   const rows = [];
 
   Object.values(positionMap).forEach(tire => {
-    if (selectedCenter && tire.center !== selectedCenter) return;
+    if (selectedCenter && tire.unit !== selectedCenter) return;
 
     const tread = latestTreadMap[tire.tireNumber];
     const d1 = tread ? (tread.d1 || 0) : tire.d1Inst;
@@ -269,7 +269,7 @@ export function getFuelPeriods(fuelData, rawData) {
 export function getRequisitionCenters(rawData) {
   const centers = new Set();
   (rawData || [])
-    .filter(r => r._sheet === 'เปลี่ยนยาง' && r['ศูนย์บริการ'])
-    .forEach(r => centers.add(r['ศูนย์บริการ']));
+    .filter(r => r._sheet === 'เปลี่ยนยาง' && r['สังกัดรถ'])
+    .forEach(r => centers.add(r['สังกัดรถ']));
   return Array.from(centers).sort();
 }

@@ -127,7 +127,7 @@ export default function Requisition({ rawData, fuelData }) {
             value={selectedCenter}
             onChange={e => setSelectedCenter(e.target.value)}
           >
-            <option value="">ทุกศูนย์บริการ</option>
+            <option value="">ทุกสังกัดรถ</option>
             {centers.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
 
