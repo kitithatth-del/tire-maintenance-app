@@ -255,7 +255,13 @@ const DataExplorer = ({ data, filterOptions, onTireClick, onTruckClick }) => {
                         })()}
                       </div>
                     </td>
-                    <td style={{ fontSize: '0.85rem' }}>{row['Month'] || `${row.MM}/${row.YYYY}`}</td>
+                    <td style={{ fontSize: '0.85rem' }}>
+                      {row['Month'] 
+                        ? row['Month'] 
+                        : (row.MM != null && row.YYYY != null && String(row.MM) !== 'undefined' && String(row.YYYY) !== 'undefined')
+                          ? `${String(row.MM).padStart(2, '0')}/${row.YYYY}`
+                          : '-'}
+                    </td>
                     <td style={{ fontSize: '0.85rem' }}>{row['ศูนย์บริการ'] || '-'}</td>
                     <td>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{row['สังกัดรถ'] || '-'}</div>

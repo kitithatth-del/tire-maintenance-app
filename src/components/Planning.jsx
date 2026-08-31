@@ -1018,7 +1018,7 @@ const getExpectedTireCount = (truckTires) => {
   return 10;
 };
 
-const LegendModal = ({ isOpen, onClose }) => {
+const LegendModal = ({ isOpen, onClose, viewMode = 'tread' }) => {
   if (!isOpen) return null;
   return createPortal(
     <div
@@ -1048,24 +1048,44 @@ const LegendModal = ({ isOpen, onClose }) => {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>สีของดอกยาง (ความลึกเฉลี่ย)</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#10b981' }} /> ปกติ (≥ 7 มม.)
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#3b82f6' }} /> วางแผนสั่ง (4 - 6.9 มม.)
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#f59e0b' }} /> ควรเปลี่ยน (2.1 - 3.9 มม.)
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#ef4444' }} /> เปลี่ยนทันที (≤ 2 มม.)
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#64748b' }} /> ไม่มีข้อมูลความลึกดอกยาง
-              </div>
+            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
+              {viewMode === 'check' ? 'สถานะการตรวจเช็ค (ระยะเวลา)' : 'สีของดอกยาง (ความลึกเฉลี่ย)'}
             </div>
+            
+            {viewMode === 'check' ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                  <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#10b981' }} /> ตรวจเช็คแล้ว (เดือนปัจจุบัน)
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                  <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#f59e0b' }} /> ขาดตรวจ 1 เดือน
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                  <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#ef4444' }} /> ขาดตรวจ ≥ 2 เดือน
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                  <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#64748b' }} /> ไม่มีข้อมูลการตรวจ
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                  <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#10b981' }} /> ปกติ (≥ 7 มม.)
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                  <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#3b82f6' }} /> วางแผนสั่ง (4 - 6.9 มม.)
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                  <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#f59e0b' }} /> ควรเปลี่ยน (2.1 - 3.9 มม.)
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                  <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#ef4444' }} /> เปลี่ยนทันที (≤ 2 มม.)
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                  <div style={{ width: 16, height: 16, borderRadius: '4px', background: '#64748b' }} /> ไม่มีข้อมูลความลึกดอกยาง
+                </div>
+              </div>
+            )}
           </div>
 
           <div style={{ height: 1, background: 'var(--border-medium)' }} />
@@ -1606,7 +1626,7 @@ function PlanningInner({ data, rawData, truckMetadata, onTireClick, onTruckClick
   return (
     <>
       <div className="planning-container">
-        <LegendModal isOpen={showLegend} onClose={() => setShowLegend(false)} />
+        <LegendModal isOpen={showLegend} onClose={() => setShowLegend(false)} viewMode={chassisViewMode} />
         <WearStatsModal isOpen={showWearStats} onClose={() => setShowWearStats(false)} wearRates={wearRates} />
 
         {/* KPI Dashboard */}

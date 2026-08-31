@@ -803,6 +803,9 @@ export const processTireData = (data, truckMetadata = null) => {
     if (installDateObj) {
       effectiveMM = installDateObj.getMonth() + 1;
       effectiveYYYY = installDateObj.getFullYear();
+    } else if (baselineDateObj) {
+      effectiveMM = baselineDateObj.getMonth() + 1;
+      effectiveYYYY = baselineDateObj.getFullYear();
     }
 
     // Compute effective wear rate per day with a realistic lower bound
