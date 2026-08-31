@@ -244,17 +244,20 @@ const TireHistoryModal = ({ tireNumber, data, onClose }) => {
                   let bgColor = 'var(--overlay-bg)';
                   let borderColor = 'rgba(16,185,129,0.5)';
                   let cardBg = 'rgba(16,185,129,0.03)';
+                  let iconBgColor = 'rgba(16,185,129,0.1)';
                   
                   if (!isInstalled && !isInspection) {
                     Icon = ArrowUpCircle;
                     iconColor = '#ef4444'; // Red
                     borderColor = 'rgba(239,68,68,0.5)';
                     cardBg = 'rgba(239,68,68,0.03)';
+                    iconBgColor = 'rgba(239,68,68,0.1)';
                   } else if (isInspection) {
                     Icon = Search;
                     iconColor = '#3b82f6'; // Blue
                     borderColor = 'rgba(59,130,246,0.5)';
                     cardBg = 'rgba(59,130,246,0.03)';
+                    iconBgColor = 'rgba(59,130,246,0.1)';
                   }
 
                   return (
@@ -359,15 +362,15 @@ const TireHistoryModal = ({ tireNumber, data, onClose }) => {
                           {/* Truck Info Grid */}
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1.5rem' }}>
                             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                              <div style={{ background: 'rgba(16,185,129,0.1)', padding: '8px', borderRadius: '10px' }}><Truck size={18} color="var(--accent-primary)" /></div>
+                              <div style={{ background: iconBgColor, padding: '8px', borderRadius: '10px' }}><Truck size={18} color={iconColor} /></div>
                               <div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', letterSpacing: '0.05em', marginBottom: '4px', textTransform: 'uppercase' }}>เบอร์รถ / ตำแหน่ง</div>
-                                <div style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)' }}>{evt.truck} <span style={{ color: 'var(--text-secondary)', fontWeight: 300, margin: '0 4px' }}>|</span> <span style={{ color: 'var(--accent-secondary)' }}>ล้อ {evt.position}</span></div>
+                                <div style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)' }}>{evt.truck} <span style={{ color: 'var(--text-secondary)', fontWeight: 300, margin: '0 4px' }}>|</span> <span style={{ color: iconColor }}>ล้อ {evt.position}</span></div>
                               </div>
                             </div>
                             
                             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                              <div style={{ background: 'rgba(16,185,129,0.1)', padding: '8px', borderRadius: '10px' }}><Wrench size={18} color="var(--accent-primary)" /></div>
+                              <div style={{ background: iconBgColor, padding: '8px', borderRadius: '10px' }}><Wrench size={18} color={iconColor} /></div>
                               <div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', letterSpacing: '0.05em', marginBottom: '4px', textTransform: 'uppercase' }}>สังกัดรถ</div>
                                 <div style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)' }}>{evt.unit || '-'}</div>

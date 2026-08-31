@@ -1383,6 +1383,7 @@ function PlanningInner({ data, rawData, truckMetadata, onTireClick, onTruckClick
     const monthMap = {};
     const issueMap = {};
     let totalCritical = 0, totalWarning = 0, totalPlan = 0, totalNormal = 0;
+    let totalChecked = 0, totalMissed1 = 0, totalMissed2Plus = 0, totalNoData = 0;
 
     filtered.forEach(tire => {
       const fleet = tire['สังกัดรถ'] || 'ไม่ระบุ';
@@ -1418,6 +1419,23 @@ function PlanningInner({ data, rawData, truckMetadata, onTireClick, onTruckClick
         if (issueMap[issue.text] === undefined) issueMap[issue.text] = 0;
         issueMap[issue.text]++;
       });
+
+      // Inspection Status Proportion
+      let mm = parseInt(tire['MM'], 10);
+      let yyyy = parseInt(tire['YYYY'], 10);
+      if (!isNaN(mm) && !isNaN(yyyy)) {
+        if (yyyy < 100) yyyy += 2000;
+        else if (yyyy > 2400) yyyy -= 543;
+        const currentYYYY = new Date().getFullYear();
+        const currentMM = new Date().getMonth() + 1;
+        const diff = (currentYYYY - yyyy) * 12 + (currentMM - mm);
+        
+        if (diff >= 2) totalMissed2Plus++;
+        else if (diff === 1) totalMissed1++;
+        else totalChecked++;
+      } else {
+        totalNoData++;
+      }
     });
 
     const allFleets = Object.values(fleetMap);
@@ -1472,7 +1490,14 @@ function PlanningInner({ data, rawData, truckMetadata, onTireClick, onTruckClick
       };
     });
 
-    return { fleetChartData, monthChartData, issueChartData, top5Critical, totalCritical, totalWarning, totalPlan, totalNormal };
+    const inspectionChartData = [
+      { name: 'ตรวจเช็คแล้ว', value: totalChecked, color: '#10b981' },
+      { name: 'ขาดตรวจ 1 เดือน', value: totalMissed1, color: '#f59e0b' },
+      { name: 'ขาดตรวจ ≥ 2 เดือน', value: totalMissed2Plus, color: '#ef4444' },
+      { name: 'ไม่มีข้อมูล', value: totalNoData, color: '#64748b' }
+    ].filter(item => item.value > 0);
+
+    return { fleetChartData, monthChartData, issueChartData, top5Critical, totalCritical, totalWarning, totalPlan, totalNormal, inspectionChartData };
   }, [filtered]);
 
   useEffect(() => {
@@ -1825,9 +1850,8 @@ function PlanningInner({ data, rawData, truckMetadata, onTireClick, onTruckClick
       </div>
     </div >
 
-      {/* Row 3: Diagnostics + Top 5 Critical */ }
-      < div style = {{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }
-}>
+      {/* Row 3: Diagnostics + Inspection Status + Top 5 Critical */ }
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
 
   {/* Diagnostic Issues Pie Chart */ }
   < div className = "glass-panel" style = {{ padding: '1.5rem', borderRadius: '16px', background: 'var(--overlay-black-30)' }}>
@@ -1879,6 +1903,60 @@ function PlanningInner({ data, rawData, truckMetadata, onTireClick, onTruckClick
 )
 }
             </div >
+
+            {/* Inspection Status Pie Chart */}
+            <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '16px', background: 'var(--overlay-black-30)' }}>
+              <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>สัดส่วนสถานะการตรวจเช็ค</h3>
+              <p style={{ margin: '-0.5rem 0 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>จำนวนยางตามระยะเวลาที่ขาดการตรวจเช็ค</p>
+              {dashboardData.inspectionChartData && dashboardData.inspectionChartData.length > 0 ? (
+                <div style={{ width: '100%', height: 240, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsPieChart>
+                      <Pie
+                        data={dashboardData.inspectionChartData}
+                        cx="40%"
+                        cy="50%"
+                        innerRadius={65}
+                        outerRadius={90}
+                        paddingAngle={5}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {dashboardData.inspectionChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip
+                        contentStyle={{ backgroundColor: '#1a1f2e', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '10px', fontSize: '0.85rem' }}
+                        itemStyle={{ color: '#fff' }}
+                        formatter={(value, name) => {
+                          const total = dashboardData.inspectionChartData.reduce((acc, item) => acc + item.value, 0);
+                          const percent = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                          return [`${value} เส้น (${percent}%)`, ''];
+                        }}
+                      />
+                      <Legend
+                        layout="vertical"
+                        verticalAlign="middle"
+                        align="right"
+                        wrapperStyle={{ fontSize: '0.75rem', color: 'var(--text-secondary)', width: '55%', right: 0 }}
+                        formatter={(value, entry) => {
+                          const { payload } = entry;
+                          const total = dashboardData.inspectionChartData.reduce((acc, item) => acc + item.value, 0);
+                          const percent = total > 0 ? ((payload.value / total) * 100).toFixed(1) : 0;
+                          return <span style={{ color: 'var(--text-primary)' }}>{value} <span style={{ color: 'var(--text-muted)' }}>({payload.value} เส้น, {percent}%)</span></span>;
+                        }}
+                      />
+                    </RechartsPieChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200, color: 'var(--text-muted)', flexDirection: 'column', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '2rem' }}>-</span>
+                  <span>ไม่มีข้อมูลสถานะการตรวจเช็ค</span>
+                </div>
+              )}
+            </div>
 
   {/* Top 5 Critical Fleets */ }
   < div className = "glass-panel" style = {{ padding: '1.5rem', borderRadius: '16px', background: 'var(--overlay-black-30)' }}>
