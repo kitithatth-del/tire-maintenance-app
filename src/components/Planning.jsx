@@ -1859,13 +1859,13 @@ function PlanningInner({ data, rawData, truckMetadata, onTireClick, onTruckClick
               <p style={{ margin: '-0.5rem 0 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>เรียงตามจำนวนยางที่ตรวจพบ</p>
 {
   dashboardData.issueChartData.length > 0 ? (
-    <div style={{ width: '100%', height: 240, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+    <div style={{ width: '100%', height: 320, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
       <ResponsiveContainer width="100%" height="100%">
         <RechartsPieChart>
           <Pie
             data={dashboardData.issueChartData}
-            cx="40%"
-            cy="50%"
+            cx="50%"
+            cy="40%"
             innerRadius={65}
             outerRadius={90}
             paddingAngle={5}
@@ -1883,13 +1883,13 @@ function PlanningInner({ data, rawData, truckMetadata, onTireClick, onTruckClick
             formatter={(value, name, props) => [`${value} เส้น (${props.payload.percent}%)`, '']}
           />
           <Legend
-            layout="vertical"
-            verticalAlign="middle"
-            align="right"
-            wrapperStyle={{ fontSize: '0.75rem', color: 'var(--text-secondary)', width: '55%', right: 0 }}
+            layout="horizontal"
+            verticalAlign="bottom"
+            align="center"
+            wrapperStyle={{ fontSize: '0.75rem', color: 'var(--text-secondary)', width: '100%', bottom: 0, padding: '0 1rem' }}
             formatter={(value, entry) => {
               const { payload } = entry;
-              return <span style={{ color: 'var(--text-primary)' }}>{value} <span style={{ color: 'var(--text-muted)' }}>({payload.value} เส้น, {payload.percent}%)</span></span>;
+              return <span style={{ color: 'var(--text-primary)', whiteSpace: 'nowrap', display: 'inline-block', marginRight: '8px' }}>{value} <span style={{ color: 'var(--text-muted)' }}>({payload.value} เส้น, {payload.percent}%)</span></span>;
             }}
           />
         </RechartsPieChart>
@@ -1909,13 +1909,13 @@ function PlanningInner({ data, rawData, truckMetadata, onTireClick, onTruckClick
               <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>สัดส่วนสถานะการตรวจเช็ค</h3>
               <p style={{ margin: '-0.5rem 0 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>จำนวนยางตามระยะเวลาที่ขาดการตรวจเช็ค</p>
               {dashboardData.inspectionChartData && dashboardData.inspectionChartData.length > 0 ? (
-                <div style={{ width: '100%', height: 240, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <div style={{ width: '100%', height: 320, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <RechartsPieChart>
                       <Pie
                         data={dashboardData.inspectionChartData}
-                        cx="40%"
-                        cy="50%"
+                        cx="50%"
+                        cy="40%"
                         innerRadius={65}
                         outerRadius={90}
                         paddingAngle={5}
@@ -1936,15 +1936,15 @@ function PlanningInner({ data, rawData, truckMetadata, onTireClick, onTruckClick
                         }}
                       />
                       <Legend
-                        layout="vertical"
-                        verticalAlign="middle"
-                        align="right"
-                        wrapperStyle={{ fontSize: '0.75rem', color: 'var(--text-secondary)', width: '55%', right: 0 }}
+                        layout="horizontal"
+                        verticalAlign="bottom"
+                        align="center"
+                        wrapperStyle={{ fontSize: '0.75rem', color: 'var(--text-secondary)', width: '100%', bottom: 0, padding: '0 1rem' }}
                         formatter={(value, entry) => {
                           const { payload } = entry;
                           const total = dashboardData.inspectionChartData.reduce((acc, item) => acc + item.value, 0);
                           const percent = total > 0 ? ((payload.value / total) * 100).toFixed(1) : 0;
-                          return <span style={{ color: 'var(--text-primary)' }}>{value} <span style={{ color: 'var(--text-muted)' }}>({payload.value} เส้น, {percent}%)</span></span>;
+                          return <span style={{ color: 'var(--text-primary)', whiteSpace: 'nowrap', display: 'inline-block', marginRight: '8px' }}>{value} <span style={{ color: 'var(--text-muted)' }}>({payload.value} เส้น, {percent}%)</span></span>;
                         }}
                       />
                     </RechartsPieChart>
