@@ -123,7 +123,7 @@ const Dashboard = ({ stats }) => {
                 <YAxis stroke="var(--text-secondary)" domain={[0, dataMax => Math.max(12, Math.ceil((dataMax + 2) / 5) * 5)]} tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} tickLine={false} axisLine={false} />
                 <RechartsTooltip content={<CustomTooltip />} />
                 <ReferenceLine y={6} stroke="#f59e0b" strokeDasharray="5 4" label={{ value: 'เป้า 6%', fill: '#f59e0b', fontSize: 11, position: 'insideTopRight' }} />
-                <Area type="monotone" dataKey="CompliancePercent" name="% NON-COMPLIANCE"
+                <Area type="linear" dataKey="CompliancePercent" name="% NON-COMPLIANCE"
                   stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#colorCompliance)" activeDot={{ r: 6, strokeWidth: 0, fill: '#ef4444' }} />
               </AreaChart>
             </ResponsiveContainer>
